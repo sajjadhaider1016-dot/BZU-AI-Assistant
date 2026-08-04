@@ -5,7 +5,7 @@
 // ======================================================
 
 require("dotenv").config();
-
+console.log("RUNNING SERVER:", __filename);
 const express = require("express");
 const cors = require("cors");
 const OpenAI = require("openai");
@@ -17,7 +17,8 @@ const fs = require("fs");
 const path = require("path");
 
 const { searchKnowledge } = require("./searchService");
-
+console.log("searchKnowledge =", searchKnowledge);
+console.log("typeof searchKnowledge =", typeof searchKnowledge);
 // ======================================================
 // EXPRESS
 // ======================================================
@@ -294,56 +295,79 @@ app.post("/chat", async (req, res) => {
         // ==========================================
         // GENERAL CHAT
         // ==========================================
+const query = cleanQuery(latestMessage);
+if (
+    query.includes("who developed you") ||
+    query.includes("who created you") ||
+    query.includes("who made you") ||
+    query.includes("who built you") ||
+    query.includes("tell me about yourself")
+) {
+    return res.json({
+        reply: "I am the official BZU AI Assistant, developed by Sajjad Haider. I was created to assist students with BZU-related information and general queries."
+    });
+}
+let knowledge = searchKnowledge(query);
 
+const noKnowledge =
+    !knowledge ||
+    knowledge.length === 0 ||
+    knowledge === "Knowledge base is empty." ||
+    knowledge === "No relevant information found.";
         if (mode === "general") {
+chatMessages = [
+    {
+        role: "system",
+        content: `You are the official BZU AI Assistant.
 
-            chatMessages = [
-      {
-    role: "system",
+Rules:
+You are the official BZU AI Assistant.
 
-    content: `
-You are BZU AI Assistant.
+Identity:
+- Your name is BZU AI Assistant.
+- You were developed by Sajjad Haider.
+- You are an AI assistant created for Bahauddin Zakariya University.
+- Your purpose is to help students with BZU information and general questions.
 
-You were developed by Sajjad Haider, a BS Artificial Intelligence student at Bahauddin Zakariya University (BZU), Multan.
+If the user asks:
+- Who developed you?
+- Who created you?
+- Who made you?
+- Who built you?
+- Tell me about yourself.
 
-You are powered by the Groq AI API using the Llama 3.3 70B Versatile model.
+Always answer:
 
-Your purpose is to help students, teachers, researchers, and professionals with accurate and helpful responses.
+"I am the official BZU AI Assistant, developed by Sajjad Haider. I was created to assist students with BZU-related information and general queries."
+2. First determine whether the user's question is about BZU.
 
-Be friendly.
+• If the question is about BZU, use the Official Knowledge below.
 
-Answer naturally.
+• If the Official Knowledge does not contain the answer to a BZU-related question, reply:
 
-Use Markdown formatting whenever appropriate.
+"The current BZU knowledge base does not include this information. Please check the latest BZU admission advertisement, official BZU website, or the relevant university office for the most up-to-date information."
 
-Keep previous conversation in memory.
+• If the question is NOT about BZU, answer normally using your own knowledge.
 
-If the user asks follow-up questions, answer according to previous messages.
+• If the user asks about your identity (for example: who developed you, who created you, who made you, what are you), answer:
 
-Always identify yourself as "BZU AI Assistant."
+"I am the official BZU AI Assistant developed by Sajjad Haider. I was built to help students with BZU information and general questions."
+${noKnowledge ? "" : knowledge}`
+    },
 
-Never claim to be ChatGPT, OpenAI, Claude, Gemini, or any other AI assistant.
-
-If someone asks your name, reply:
-"My name is BZU AI Assistant."
-
-If someone asks who created or developed you, reply:
-"I was developed by Sajjad Haider, a BS Artificial Intelligence student at Bahauddin Zakariya University (BZU), Multan."
-
-If someone asks which AI model powers you, reply:
-"I am powered by the Groq AI API using the Llama 3.3 70B Versatile model."
-`
-},
-
-...messages.map(msg => ({
+    ...messages.map(msg => ({
+        role: msg.role,
+        content: msg.text
+    }))
+];
+        
+messages.map(msg => ({
 
     role: msg.role,
 
     content: msg.text
 
 }))
-            ];
-
         }
 
         // ==========================================
@@ -352,76 +376,81 @@ If someone asks which AI model powers you, reply:
 
         else {
 
-            const query = cleanQuery(latestMessage);
+    
+console.log("Knowledge returned:", knowledge);
+    console.log("Knowledge Search:");
+    console.log("Query:", query);
+    console.log("Knowledge:", knowledge);
 
-            const knowledge = searchKnowledge(query);
+    // If nothing useful is found, fall back to normal AI
+    if (
+        !knowledge ||
+        knowledge === "Knowledge base is empty." ||
+        knowledge === "No relevant information found."
+    ) {
 
-            console.log("Knowledge Search:");
-            console.log(query);
+        chatMessages = [
 
-            if (
+            {
+                role: "system",
+                content: `You are BZU AI Assistant.
 
-                knowledge === "Knowledge base is empty." ||
+Answer naturally and professionally.
 
-                knowledge === "No relevant information found."
+If the user asks about BZU and the official knowledge is unavailable, answer using your general knowledge but clearly mention that official information should be verified from the latest BZU website or prospectus.
 
-            ) {
+Never invent exact BZU fees, dates or policies.`
+            },
 
-                return res.json({
+            ...messages.map(msg => ({
+                role: msg.role,
+                content: msg.text
+            }))
+        ];
 
-                    success: true,
+    } else {
 
-                    reply:
-                    "The official BZU knowledge base does not contain this information."
+        chatMessages = [
 
-                });
+            {
+                role: "system",
+                content: `You are the official BZU AI Assistant.
 
-            }
+You are the official BZU AI Assistant.
 
-            chatMessages = [
+Use ALL of the Official Knowledge below.
 
-                {
+If multiple sections are relevant, combine them into one complete answer.
 
-                    role: "system",
+Do not answer using only the first section.
 
-                    content:
-`You are the official BZU AI Assistant.
+Organize the answer with headings and bullet points.
 
-Rules:
+If the knowledge contains course duration, eligibility, curriculum, career scope, fee, or admissions, include every relevant point.
 
-1. ONLY answer using the Official Knowledge.
+If the answer exists in the Official Knowledge, answer from it.
 
-2. NEVER invent information.
-
-3. NEVER use outside knowledge.
-
-4. If the answer is unavailable reply exactly:
-
-"The official BZU knowledge base does not contain this information."
+If the Official Knowledge is incomplete, say that the information may have changed and recommend checking the latest BZU prospectus or official website.
 
 Official Knowledge:
 
 ${knowledge}`
+            },
 
-                },
+            ...messages.map(msg => ({
+                role: msg.role,
+                content: msg.text
+            }))
+        ];
 
-                ...messages.map(msg => ({
+    }
 
-                    role: msg.role,
-
-                    content: msg.text
-
-                }))
-
-            ];
-
-        }
-
+}
         // ==========================================
         // GROQ REQUEST
         // ==========================================
 
-        const completion = await client.chat.completions.create({
+    const completion = await client.chat.completions.create({
 
             model: AI_MODEL,
 
@@ -891,30 +920,23 @@ app.get("/test-bzu", (req, res) => {
         const result = searchKnowledge(query);
 
         res.json({
-
             success: true,
-
             query,
-
             knowledge: result
-
         });
 
-    }
+    } catch (err) {
 
-    catch (err) {
+        console.error("TEST ERROR:", err);
 
         res.status(500).json({
-
             success: false,
-
-            message: "Knowledge search failed."
-
+            message: err.message
         });
 
     }
 
-});
+});   // <-- THIS WAS MISSING
 
 // ======================================================
 // HEALTH
@@ -923,25 +945,17 @@ app.get("/test-bzu", (req, res) => {
 app.get("/health", (req, res) => {
 
     res.json({
-
         success: true,
-
         service: "BZU AI Assistant",
-
         version: "5.0",
-
         status: "Online",
-
         ai: "Groq",
-
         uptime: process.uptime(),
-
         serverTime: new Date()
-
     });
 
 });
-
+    
 // ======================================================
 // HOME
 // ======================================================

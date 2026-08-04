@@ -89,17 +89,13 @@ body{
     z-index:-1;
 
 }
-
 .app{
-
-    display:flex;
-
-    width:100vw;
-
-    height:100vh;
-
+    display: flex;
+    width: 100%;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow: hidden;
 }
-
 /* ================= SIDEBAR ================= */
 
 .sidebar{
@@ -303,7 +299,7 @@ border-right: 1px solid rgba(255,255,255,.08);
     flex:1;
     display:flex;
     flex-direction:column;
-    height:100vh;
+    min-height:100dvh;
     overflow:hidden;
     background:var(--bg);
 }
@@ -764,13 +760,14 @@ border-right: 1px solid rgba(255,255,255,.08);
 /* ================= CHAT FOOTER ================= */
 
 .chat-footer{
-
     padding:20px;
-
     background:var(--card);
-
     border-top:1px solid var(--border);
 
+    position:sticky;
+    bottom:0;
+    width:100%;
+    z-index:100;
 }
 
 .input-box{
@@ -1115,20 +1112,26 @@ border-right: 1px solid rgba(255,255,255,.08);
 
 /* ================= MOBILE ================= */
 
-@media(max-width:1000px){
+@media (max-width:1000px){
+
+    .app{
+        flex-direction:column;
+    }
 
     .sidebar{
+        width:100%;
+        height:auto;
+        padding:18px;
+    }
 
-        width:250px;
-
+    .main{
+        width:100%;
+        height:auto;
     }
 
     .bubble{
-
-        max-width:90%;
-
+        max-width:100%;
     }
-
 }
 
 @media(max-width:768px){
@@ -1241,4 +1244,50 @@ border-right: 1px solid rgba(255,255,255,.08);
 
 .developer-credit a:hover{
     text-decoration:underline;
+}@media (max-width:768px){
+
+    body{
+        overflow-x:hidden;
+    }
+
+    .app{
+        display:flex;
+        flex-direction:column;
+        width:100%;
+        min-height:100dvh;
+    }
+
+    .sidebar{
+        width:100%;
+    }
+
+    .main{
+        width:100%;
+        min-height:100dvh;
+    }
+
+    .chat-container{
+        min-height:0;
+        flex:1;
+    }
+
+    .chat-messages{
+        padding:15px;
+    }
+
+    .bubble{
+        max-width:100%;
+    }
+
+    .topbar h1{
+        font-size:22px;
+    }
+
+    .welcome h2{
+        font-size:24px;
+    }
+
+    .quick-btn{
+        width:100%;
+    }
 }

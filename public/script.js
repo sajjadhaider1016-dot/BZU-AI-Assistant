@@ -25,7 +25,7 @@ const typingIndicator = document.getElementById("typingIndicator");
 // Sidebar
 
 const newChatBtn = document.getElementById("newChatBtn");
-
+newChatBtn.addEventListener("click", newChat);
 // Theme
 
 const themeBtn = document.getElementById("themeBtn");
@@ -449,12 +449,8 @@ function newChat() {
 
     clearMessages();
 
-    welcomeScreen.style.display = "block";
-
-    chatContainer.style.display = "none";
-
+  
 }
-
 // ================= CLEAR HISTORY =================
 
 if (document.getElementById("clearHistoryBtn")) {
