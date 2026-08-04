@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>BZU AI Assistant | Developed by Sajjad Haider</title>
+
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+
+</head>
+
+<body>
+
+<div class="background-blur"></div>
+
+<div class="app">
+
+    <!-- =========================================
+                SIDEBAR
+    ========================================== -->
+
+    <aside class="sidebar">
+
+        <div class="logo">
+
+            <div class="logo-icon">
+                🧠
+            </div>
+
+            <div>
+
+                <h2>BZU AI</h2>
+
+                <span>Virtual Assistant</span>
+
+            </div>
+
+        </div>
+
+        <button id="newChatBtn" class="new-chat">
+
+            <i class="fa-solid fa-plus"></i>
+
+            New Chat
+
+        </button>
+
+        <div class="menu-title">
+
+            Recent Chats
+
+        </div>
+
+        <div id="history" class="history"></div>
+
+        <div class="sidebar-bottom">
+
+            <button id="settingsBtn">
+
+                <i class="fa-solid fa-gear"></i>
+
+                Settings
+
+            </button>
+
+            <button id="themeBtn">
+
+                <i class="fa-solid fa-moon"></i>
+
+                Dark Mode
+
+            </button>
+
+            <button id="aboutBtn">
+
+                <i class="fa-solid fa-circle-info"></i>
+
+                About
+
+            </button>
+
+        </div>
+
+        <div class="developer-card">
+
+            <div class="developer-avatar">
+
+                SH
+
+            </div>
+
+            <h3>Sajjad Haider</h3>
+
+            <p>BS Artificial Intelligence</p>
+
+            <span>Bahauddin Zakariya University</span>
+
+        </div>
+
+    </aside>
+
+    <!-- =========================================
+                MAIN CONTENT
+    ========================================== -->
+
+    <main class="main">
+
+        <!-- Top Bar -->
+
+        <header class="topbar">
+
+            <div class="title-area">
+
+                <h1>BZU AI Assistant</h1>
+
+                <p>
+
+                    Powered by <strong>Groq AI</strong>
+
+                </p>
+
+            </div>
+
+            <div class="status">
+
+                <span class="dot"></span>
+
+                Online
+
+            </div>
+
+        </header>
+
+        <!-- =========================================
+                WELCOME SCREEN
+        ========================================== -->
+
+        <section id="welcomeScreen" class="welcome">
+
+            <div class="brain">
+
+                🧠
+
+            </div>
+
+            <h2>
+
+                Welcome to BZU AI Assistant
+
+            </h2>
+
+            <p>
+
+                Your intelligent university assistant.
+
+                <br><br>
+
+                Ask anything about admissions, fee structure,
+                departments, hostels, transport,
+                scholarships, LMS, notices,
+                semester rules and much more.
+
+            </p>
+
+            <!-- Quick Buttons -->
+
+            <div class="quick-buttons">
+
+                <button class="quick-btn">
+
+                    🎓 Admissions
+
+                </button>
+
+                <button class="quick-btn">
+
+                    💰 Fee Structure
+
+                </button>
+
+                <button class="quick-btn">
+
+                    📚 Programs
+
+                </button>
+
+                <button class="quick-btn">
+
+                    🏠 Hostel
+
+                </button>                <button class="quick-btn">
+
+                    🚌 Transport
+
+                </button>
+
+                <button class="quick-btn">
+
+                    🎁 Scholarships
+
+                </button>
+
+                <button class="quick-btn">
+
+                    💻 LMS
+
+                </button>
+
+                <button class="quick-btn">
+
+                    📢 Notices
+
+                </button>
+
+            </div>
+
+            <!-- Developer Credit -->
+
+            <div class="welcome-credit">
+
+                <h3>
+
+                    Designed & Developed by
+
+                </h3>
+
+                <h2>
+
+                    Sajjad Haider
+
+                </h2>
+
+                <p>
+
+                    BS Artificial Intelligence Student
+
+                </p>
+
+                <span>
+
+                    Bahauddin Zakariya University
+
+                </span>
+
+            </div>
+
+        </section>
+
+        <!-- =========================================
+                    CHAT AREA
+        ========================================== -->
+
+        <section id="chatContainer" class="chat-container">
+
+            <!-- Messages -->
+
+            <div id="chatMessages" class="chat-messages">
+
+                <div class="message ai">
+
+                    <div class="avatar">
+
+                        🧠
+
+                    </div>
+
+                    <div class="bubble">
+
+                        <div class="bubble-header">
+
+                            <strong>BZU AI</strong>
+
+                            <span>Now</span>
+
+                        </div>
+
+                        <div class="bubble-content">
+
+                            Hello! 👋
+
+                            <br><br>
+
+                            I am <strong>BZU AI Assistant</strong>.
+
+                            <br><br>
+
+                            Ask me anything about admissions,
+                            fee structure, departments,
+                            scholarships, transport,
+                            examinations or university rules.
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <!-- Typing Indicator -->
+
+            <div id="typingIndicator" class="typing hidden">
+
+                <div class="avatar">
+
+                    🧠
+
+                </div>
+
+                <div class="typing-bubble">
+
+                    <span></span>
+                    <span></span>
+                    <span></span>
+
+                </div>
+
+            </div>            <!-- =========================================
+                        CHAT FOOTER
+            ========================================== -->
+
+           
+        </section>
+ <footer class="chat-footer">
+
+                <div class="input-box">
+
+                    <!-- Upload -->
+
+                    <button
+                        id="uploadBtn"
+                        class="icon-btn"
+                        title="Upload File">
+
+                        <i class="fa-solid fa-paperclip"></i>
+
+                    </button>
+
+                    <input
+                        type="file"
+                        id="fileInput"
+                        hidden>
+
+                    <!-- Voice -->
+
+                    <button
+                        id="voiceBtn"
+                        class="icon-btn"
+                        title="Voice Input">
+
+                        <i class="fa-solid fa-microphone"></i>
+
+                    </button>
+
+                    <!-- Message -->
+
+                    <textarea
+                        id="messageInput"
+                        rows="1"
+                        placeholder="Ask anything about BZU..."></textarea>
+
+                    <!-- Send -->
+
+                    <button
+                        id="sendBtn"
+                        class="send-btn"
+                        title="Send">
+
+                        <i class="fa-solid fa-paper-plane"></i>
+
+                    </button>
+
+                </div>
+
+                <div class="footer-note">
+
+                    AI can make mistakes.
+                    Please verify important university
+                    information before relying on the response.
+
+                </div>
+
+            </footer>
+
+    </main>
+
+    <!-- =========================================
+                    SETTINGS MODAL
+    ========================================== -->
+
+    <div
+        id="settingsModal"
+        class="modal hidden">
+
+        <div class="modal-content">
+
+            <div class="modal-header">
+
+                <h2>
+
+                    <i class="fa-solid fa-gear"></i>
+
+                    Settings
+
+                </h2>
+
+                <button
+                    class="close-modal">
+
+                    &times;
+
+                </button>
+
+            </div>
+
+            <div class="modal-body">
+
+                <button
+                    id="themeToggleBtn"
+                    class="modal-btn">
+
+                    🌙 Toggle Dark Mode
+
+                </button>
+
+                <button
+                    id="newChatModalBtn"
+                    class="modal-btn">
+
+                    ➕ Start New Chat
+
+                </button>
+
+                <button
+                    id="clearHistoryBtn"
+                    class="modal-btn danger">
+
+                    🗑 Clear Chat History
+
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>    <!-- =========================================
+                    ABOUT MODAL
+    ========================================== -->
+
+    <div
+        id="aboutModal"
+        class="modal hidden">
+
+        <div class="modal-content">
+
+            <div class="modal-header">
+
+                <h2>
+
+                    <i class="fa-solid fa-circle-info"></i>
+
+                    About BZU AI
+
+                </h2>
+
+                <button
+                    class="close-modal">
+
+                    &times;
+
+                </button>
+
+            </div>
+
+            <div class="modal-body">
+
+                <div class="about-logo">
+
+                    🧠
+
+                </div>
+
+                <h2>
+
+                    BZU AI Assistant
+
+                </h2>
+
+                <p>
+
+                    An intelligent AI assistant developed for
+                    students of Bahauddin Zakariya University.
+
+                </p>
+
+                <hr>
+
+                <h3>
+
+                    Developer
+
+                </h3>
+
+                <p>
+
+                    <strong>Sajjad Haider</strong>
+
+                </p>
+
+                <p>
+
+                    BS Artificial Intelligence Student
+
+                </p>
+
+                <p>
+
+                    Bahauddin Zakariya University, Multan
+
+                </p>
+
+                <hr>
+
+                <h3>
+
+                    Technologies
+
+                </h3>
+
+                <ul class="feature-list">
+
+                    <li>✅ HTML5</li>
+
+                    <li>✅ CSS3</li>
+
+                    <li>✅ JavaScript</li>
+
+                    <li>✅ Node.js</li>
+
+                    <li>✅ Express.js</li>
+
+                    <li>✅ Groq AI API</li>
+
+                    <li>✅ Markdown Support</li>
+
+                    <li>✅ Speech Recognition</li>
+
+                    <li>✅ File Upload</li>
+
+                    <li>✅ Local Chat History</li>
+
+                    <li>✅ Dark Mode</li>
+
+                    <li>✅ Responsive UI</li>
+
+                </ul>
+
+                <hr>
+
+                <h3>
+
+                    Version
+
+                </h3>
+
+                <p>
+
+                    Version 4.0
+
+                </p>
+
+                <p>
+
+                    © 2026 Sajjad Haider
+
+                </p>
+
+            </div>
+
+        </div>
+
+    </div>    <!-- =========================================
+                JAVASCRIPT
+    ========================================== -->
+
+    <!-- Markdown Support -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <!-- Main Script -->
+    <script src="script.js"></script>
+
+</body>
+
+</html>
