@@ -395,7 +395,7 @@ border-right: 1px solid rgba(255,255,255,.08);
 
 .welcome{
     text-align:center;
-    padding:5px 10px;
+    padding:15px 10px;
     flex-shrink:0;
 }
 .brain{
@@ -424,7 +424,7 @@ border-right: 1px solid rgba(255,255,255,.08);
 
 .welcome h2{
     margin-top:8px;
-    font-size:22px;
+    font-size:24px;
 }
 .welcome p{
     margin-top:8px;
@@ -480,7 +480,7 @@ border-right: 1px solid rgba(255,255,255,.08);
     min-height:0;
     overflow-y:auto;
     overflow-x:hidden;
-    padding:30px;
+    padding:15px;
     display:flex;
     flex-direction:column;
     gap:25px;
@@ -1251,4 +1251,36 @@ border-right: 1px solid rgba(255,255,255,.08);
     font-size:20px;
     margin:5px 0;
 }
+    }@media(max-width:768px){
+
+    .welcome{
+        padding:10px;
     }
+
+    .welcome h2{
+        font-size:22px;
+    }
+
+    .welcome p{
+        font-size:13px;
+    }
+
+  .quick-buttons{
+
+    margin-top:12px;
+
+    display:flex;
+
+    flex-wrap:wrap;
+
+    justify-content:center;
+
+    gap:10px;
+
+}
+    .quick-btn{
+        padding:7px 12px;
+        font-size:13px;
+    }
+
+}
