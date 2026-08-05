@@ -74,7 +74,7 @@ const client = new OpenAI({
 // APPLICATION CONFIG
 // ======================================================
 
-const AI_MODEL = "llama-3.3-70b-versatile";
+const AI_MODEL = "llama-3.1-8b-instant";
 
 const MAX_CHAT_TOKENS = 500;
 
@@ -840,12 +840,11 @@ app.post("/upload", upload.single("file"), async (req, res) => {
         const completion =
             await client.chat.completions.create({
 
-                model: "llama-3.3-70b-versatile",
+                model: "llama-3.1-8b-instant",
 
-                temperature: 0.2,
+temperature: 0.3,
 
-                max_tokens: 1200,
-
+max_tokens: 400,
                 messages: [
 
                     {
@@ -999,7 +998,7 @@ app.listen(PORT, () => {
     console.log("====================================================");
     console.log(`🚀 Server      : http://localhost:${PORT}`);
     console.log("🤖 AI Engine   : Groq");
-    console.log("🧠 Model       : llama-3.3-70b-versatile");
+    console.log("🧠 Model       : llama-3.1-8b-instant");
     console.log("📚 Knowledge   : Enabled");
     console.log("📄 PDF Upload  : Enabled");
     console.log("📘 DOCX Upload : Enabled");
