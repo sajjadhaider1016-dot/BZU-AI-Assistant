@@ -4456,8 +4456,13 @@
   "text": "www.bzu.edu.pk"
 },
 {
-  "id": 892,
-  "title": "BS Artificial Intelligence",
-  "text": "Bachelor of Science in Artificial Intelligence (BS AI) is an undergraduate degree offered by Bahauddin Zakariya University. The program has a duration of four years consisting of eight semesters. It provides education in Artificial Intelligence, Machine Learning, Deep Learning, Natural Language Processing, Computer Vision, Robotics, Data Science, Intelligent Systems, Programming Fundamentals, Object-Oriented Programming, Data Structures, Algorithms, Database Systems, Software Engineering, Computer Networks, Operating Systems and Final Year Project. The objective of the program is to prepare graduates capable of designing intelligent systems and solving real-world problems using AI technologies. Career opportunities include AI Engineer, Machine Learning Engineer, Data Scientist, Computer Vision Engineer, NLP Engineer, Robotics Engineer, Researcher and Software Developer. Students should consult the latest BZU admission advertisement for current eligibility criteria, merit, fee structure and admission schedule because these may change each year."
+    "id": 892,
+    "title": "BS Artificial Intelligence",
+    "text": "Bachelor of Science in Artificial Intelligence (BS AI) is an undergraduate degree offered..."
+},
+{
+    "id": 893,
+    "title": "BZU Departments",
+    "text": "Bahauddin Zakariya University (BZU) has many departments including Artificial Intelligence, Computer Science, Information Technology, Mathematics, Physics, Chemistry, English, Economics, Business Administration, Law, Pharmacy, Education, Agriculture, Engineering and other academic departments."
 }
 ]

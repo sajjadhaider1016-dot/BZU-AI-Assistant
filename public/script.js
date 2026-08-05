@@ -56,7 +56,7 @@ let isTyping = false;
 // Initial UI
 
 welcomeScreen.style.display = "block";
-chatContainer.style.display = "none";
+chatContainer.style.display = "flex";
 // Hide typing indicator
 
 typingIndicator.classList.add("hidden");
