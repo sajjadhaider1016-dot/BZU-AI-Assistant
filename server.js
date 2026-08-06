@@ -503,14 +503,12 @@ ${knowledge}`
 // ======================================================
 app.post("/upload", upload.single("file"), async (req, res) => {
 
-    console.log("========== UPLOAD REQUEST ==========");
-    console.log("Headers:", req.headers);
+    console.log("========== UPLOAD START ==========");
     console.log("File:", req.file);
 
     try {
 
-        // CHECK FILE
-        // ==========================================
+        console.log("Processing upload...");        // ==========================================
         // CHECK FILE
         // ==========================================
 

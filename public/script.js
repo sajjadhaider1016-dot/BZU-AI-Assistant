@@ -591,11 +591,6 @@ document.querySelectorAll(".quick-btn").forEach(button => {
 
 // ================= FILE UPLOAD =================
 
-uploadBtn.addEventListener("click", () => {
-    console.log("Upload button clicked");
-    fileInput.click();
-});
-
 fileInput.addEventListener("change", async () => {
 
     console.log("Change event fired");
