@@ -588,12 +588,6 @@ document.querySelectorAll(".quick-btn").forEach(button => {
 
 });
 
-// ================= FILE UPLOAD =================
-uploadBtn.addEventListener("pointerup", () => {
-
-    fileInput.click();
-
-});
 
 // ================= FILE UPLOAD =================
 
