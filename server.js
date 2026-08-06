@@ -503,7 +503,8 @@ ${knowledge}`
 // ======================================================
 
 app.post("/upload", upload.single("file"), async (req, res) => {
-
+console.log("========== UPLOAD ==========");
+console.log(req.file);
     try {
 
         // ==========================================
@@ -719,8 +720,9 @@ Please analyze this document.`
     catch (error) {
 
         console.error("\nUPLOAD ERROR\n");
-
-        console.error(error);
+console.error("UPLOAD ERROR");
+console.error(error);
+console.error(error.stack);
 
         // Delete temp file if it exists
 
@@ -739,166 +741,7 @@ Please analyze this document.`
         return res.status(500).json({
 
             success: false,
-
-            reply: "Unable to analyze the uploaded document."
-
-        });
-
-    }
-
-});
-
-// ======================================================
-// END OF PART 3
-// ======================================================// ======================================================
-// PART 4 OF 4
-// FILE UPLOAD + ROUTES + SERVER
-// ======================================================
-
-// ======================================================
-// FILE UPLOAD API
-// ======================================================
-
-app.post("/upload", upload.single("file"), async (req, res) => {
-
-    try {
-
-        if (!req.file) {
-            return res.status(400).json({
-                success: false,
-                reply: "No file uploaded."
-            });
-        }
-
-        let documentText = "";
-
-        // ================= PDF =================
-
-        if (req.file.mimetype === "application/pdf") {
-
-            const pdf = await pdfParse(fs.readFileSync(req.file.path));
-            documentText = pdf.text;
-
-        }
-
-        // ================= DOCX =================
-
-        else if (
-            req.file.mimetype ===
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        ) {
-
-            const result = await mammoth.extractRawText({
-                path: req.file.path
-            });
-
-            documentText = result.value;
-
-        }
-
-        // ================= TXT =================
-
-        else if (req.file.mimetype === "text/plain") {
-
-            documentText = fs.readFileSync(
-                req.file.path,
-                "utf8"
-            );
-
-        }
-
-        else {
-
-            fs.unlinkSync(req.file.path);
-
-            return res.status(400).json({
-                success: false,
-                reply: "Only PDF, DOCX and TXT files are supported."
-            });
-
-        }
-
-        // Delete temporary file
-
-        if (fs.existsSync(req.file.path)) {
-            fs.unlinkSync(req.file.path);
-        }
-
-        if (!documentText.trim()) {
-
-            return res.status(400).json({
-                success: false,
-                reply: "The uploaded document is empty."
-            });
-
-        }
-
-        // Limit text
-
-        documentText = documentText.substring(0, 12000);
-
-        const completion =
-            await client.chat.completions.create({
-
-                model: "llama-3.1-8b-instant",
-
-temperature: 0.3,
-
-max_tokens: 400,
-                messages: [
-
-                    {
-                        role: "system",
-                        content:
-`You are an AI document assistant.
-
-Analyze ONLY the uploaded document.
-
-Return:
-
-• Summary
-• Important points
-• Main topics
-• Key information
-
-Use Markdown formatting.`
-                    },
-
-                    {
-                        role: "user",
-                        content: documentText
-                    }
-
-                ]
-
-            });
-
-        return res.json({
-
-            success: true,
-
-            reply: completion.choices[0].message.content
-
-        });
-
-    }
-
-    catch (error) {
-
-        console.error(error);
-
-        if (
-            req.file &&
-            fs.existsSync(req.file.path)
-        ) {
-            fs.unlinkSync(req.file.path);
-        }
-
-        return res.status(500).json({
-
-            success: false,
-
-            reply: "Unable to analyze the uploaded document."
+reply: error.message
 
         });
 
@@ -906,6 +749,8 @@ Use Markdown formatting.`
 
 });
 
+
+   
 // ======================================================
 // TEST KNOWLEDGE SEARCH
 // ======================================================
