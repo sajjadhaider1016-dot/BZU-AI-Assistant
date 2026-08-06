@@ -589,8 +589,7 @@ document.querySelectorAll(".quick-btn").forEach(button => {
 });
 
 // ================= FILE UPLOAD =================
-
-uploadBtn.addEventListener("click", () => {
+uploadBtn.addEventListener("pointerup", () => {
 
     fileInput.click();
 
@@ -598,9 +597,23 @@ uploadBtn.addEventListener("click", () => {
 
 fileInput.addEventListener("change", async () => {
 
-    if (!fileInput.files.length) return;
+    alert("CHANGE EVENT FIRED");
+
+    console.log("Change event fired");
+
+    console.log(fileInput.files);
+
+    if (!fileInput.files.length) {
+
+        alert("No file selected");
+
+        return;
+
+    }
 
     const file = fileInput.files[0];
+
+    alert("Selected file: " + file.name);
 
     const formData = new FormData();
 
@@ -612,6 +625,8 @@ fileInput.addEventListener("change", async () => {
 
     try {
 
+        console.log("Uploading...");
+
         const response = await fetch("/upload", {
 
             method: "POST",
@@ -620,31 +635,27 @@ fileInput.addEventListener("change", async () => {
 
         });
 
+        console.log("Upload Status:", response.status);
+
         const data = await response.json();
 
         hideTyping();
 
         addAIMessage(
-
             data.reply ||
-
             data.message ||
-
             "File uploaded successfully."
-
         );
 
     }
 
     catch (err) {
 
+        console.error(err);
+
         hideTyping();
 
-        addAIMessage(
-
-            "❌ File upload failed."
-
-        );
+        addAIMessage("❌ File upload failed.");
 
     }
 
