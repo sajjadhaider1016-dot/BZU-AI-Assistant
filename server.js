@@ -501,12 +501,15 @@ ${knowledge}`
 // ======================================================// ======================================================
 // PART 3/4 - FILE UPLOAD & DOCUMENT ANALYSIS
 // ======================================================
-
 app.post("/upload", upload.single("file"), async (req, res) => {
-console.log("========== UPLOAD ==========");
-console.log(req.file);
+
+    console.log("========== UPLOAD REQUEST ==========");
+    console.log("Headers:", req.headers);
+    console.log("File:", req.file);
+
     try {
 
+        // CHECK FILE
         // ==========================================
         // CHECK FILE
         // ==========================================

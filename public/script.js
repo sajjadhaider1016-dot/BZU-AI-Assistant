@@ -627,7 +627,15 @@ fileInput.addEventListener("change", async () => {
 
         console.log("Response Status:", response.status);
 
-        const data = await response.json();
+       const text = await response.text();
+console.log("Server response:", text);
+
+let data;
+try {
+    data = JSON.parse(text);
+} catch {
+    throw new Error(text);
+}
 
         console.log("Server Response:", data);
 
