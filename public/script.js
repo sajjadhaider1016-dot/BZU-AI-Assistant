@@ -595,28 +595,27 @@ uploadBtn.addEventListener("pointerup", () => {
 
 });
 
-fileInput.addEventListener("change", async () => {
+// ================= FILE UPLOAD =================
 
-    alert("CHANGE EVENT FIRED");
+uploadBtn.addEventListener("click", () => {
+    console.log("Upload button clicked");
+    fileInput.click();
+});
+
+fileInput.addEventListener("change", async () => {
 
     console.log("Change event fired");
 
-    console.log(fileInput.files);
-
     if (!fileInput.files.length) {
-
-        alert("No file selected");
-
+        console.log("No file selected");
         return;
-
     }
 
     const file = fileInput.files[0];
 
-    alert("Selected file: " + file.name);
+    console.log("File selected:", file);
 
     const formData = new FormData();
-
     formData.append("file", file);
 
     addUserMessage("📄 Uploaded: " + file.name);
@@ -625,19 +624,18 @@ fileInput.addEventListener("change", async () => {
 
     try {
 
-        console.log("Uploading...");
+        console.log("Sending upload request...");
 
         const response = await fetch("/upload", {
-
             method: "POST",
-
             body: formData
-
         });
 
-        console.log("Upload Status:", response.status);
+        console.log("Response Status:", response.status);
 
         const data = await response.json();
+
+        console.log("Server Response:", data);
 
         hideTyping();
 
@@ -647,11 +645,9 @@ fileInput.addEventListener("change", async () => {
             "File uploaded successfully."
         );
 
-    }
+    } catch (err) {
 
-    catch (err) {
-
-        console.error(err);
+        console.error("UPLOAD ERROR:", err);
 
         hideTyping();
 
