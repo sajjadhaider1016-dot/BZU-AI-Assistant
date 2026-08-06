@@ -71,7 +71,13 @@ if (localStorage.getItem("theme") === "dark") {
 
 // Load history
 
-renderHistory();/* =====================================================
+renderHistory();
+if (chats.length > 0) {
+    loadChat(chats[0]);      // open latest chat
+} else {
+    newChat();
+}
+/* =====================================================
    PART 2 - MESSAGE RENDERING
 =====================================================*/
 
@@ -190,15 +196,32 @@ function saveCurrentChat() {
 
     if (currentChat.length === 0) return;
 
-    chats.unshift({
+    // Update existing chat
+    if (chats.length > 0 && chats[0].id === currentChat.id) {
 
-        id: Date.now(),
+        chats[0].messages = [...currentChat];
+        chats[0].title = currentChat[0].text.substring(0, 40);
 
-        title: currentChat[0].text.substring(0, 40),
+    }
 
-        messages: [...currentChat]
+    // Create new chat
+    else {
 
-    });
+        const chat = {
+
+            id: Date.now(),
+
+            title: currentChat[0].text.substring(0, 40),
+
+            messages: [...currentChat]
+
+        };
+
+        currentChat.id = chat.id;
+
+        chats.unshift(chat);
+
+    }
 
     if (chats.length > 20) {
 
@@ -207,11 +230,8 @@ function saveCurrentChat() {
     }
 
     localStorage.setItem(
-
         "bzuChats",
-
         JSON.stringify(chats)
-
     );
 
     renderHistory();
@@ -280,17 +300,25 @@ console.log(JSON.stringify(data, null, 2));console.log(data);
             data.message ||
             "No response received.";
 
-        currentChat.push({
+      currentChat.push({
+    role: "assistant",
+    text: aiReply
+});
 
-            role: "assistant",
+addAIMessage(aiReply);
 
-            text: aiReply
+if (chats.length > 0) {
 
-        });
+    chats[0].messages = [...currentChat];
+    chats[0].title = currentChat[0].text.substring(0, 40);
 
-        addAIMessage(aiReply);
+} else {
 
-        saveCurrentChat();
+    saveCurrentChat();
+
+}
+
+localStorage.setItem("bzuChats", JSON.stringify(chats));
 
     }
 
@@ -440,7 +468,13 @@ function loadChat(chat) {
     scrollToBottom();
 
 }
+function restoreLastChat() {
 
+    if (chats.length === 0) return;
+
+    loadChat(chats[0]);
+
+}
 // ================= NEW CHAT =================
 
 function newChat() {
@@ -736,10 +770,9 @@ if (
 
 renderHistory();
 
-scrollToBottom();
+restoreLastChat();
 
 messageInput.focus();
-
 console.log("=======================================");
 console.log("BZU AI Assistant");
 console.log("Version 4.0");
