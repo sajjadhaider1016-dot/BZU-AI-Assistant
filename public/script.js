@@ -590,7 +590,18 @@ document.querySelectorAll(".quick-btn").forEach(button => {
 
 
 // ================= FILE UPLOAD =================
+// ================= OPEN FILE PICKER =================
 
+uploadBtn.addEventListener("click", (e) => {
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    fileInput.value = "";
+
+    fileInput.click();
+
+});
 fileInput.addEventListener("change", async () => {
 
     console.log("Change event fired");
