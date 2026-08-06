@@ -626,23 +626,22 @@ fileInput.addEventListener("change", async () => {
 
         console.log("Sending upload request...");
 
-        const response = await fetch("/upload", {
-            method: "POST",
-            body: formData
-        });
+    const response = await fetch("/upload", {
+    method: "POST",
+    body: formData
+});
 
-        console.log("Response Status:", response.status);
+console.log("Upload Status:", response.status);
 
-       const text = await response.text();
-console.log("Server response:", text);
+const text = await response.text();
 
-let data;
-try {
-    data = JSON.parse(text);
-} catch {
+console.log("Upload Response:", text);
+
+if (!response.ok) {
     throw new Error(text);
 }
 
+const data = JSON.parse(text);
         console.log("Server Response:", data);
 
         hideTyping();
@@ -655,13 +654,13 @@ try {
 
     } catch (err) {
 
-        console.error("UPLOAD ERROR:", err);
+    console.error("UPLOAD ERROR:", err);
 
-        hideTyping();
+    hideTyping();
 
-        addAIMessage("❌ File upload failed.");
+    addAIMessage("❌ " + err.message);
 
-    }
+}
 
 });
 
