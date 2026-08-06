@@ -654,11 +654,11 @@ const data = JSON.parse(text);
 
     } catch (err) {
 
-    console.error("UPLOAD ERROR:", err);
+    console.error(err);
 
     hideTyping();
 
-    addAIMessage("❌ " + err.message);
+    addAIMessage("❌ Upload failed:\n\n" + err.message);
 
 }
 
