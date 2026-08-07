@@ -596,7 +596,17 @@ const noKnowledge =
 
 knowledge.length===0;
 
+const officialKnowledgeText = knowledge
+    .map((item, index) => {
+        return `
+SOURCE ${index + 1}
+TITLE: ${item.title}
 
+CONTENT:
+${item.text}
+`;
+    })
+    .join("\n==============================\n");
 
 // ======================================================
 // CONTINUE PART 3
@@ -834,7 +844,33 @@ If valid information was found, provide it directly.
 If valid information was not found, provide only:
 
 "I could not find this information in the official BZU knowledge base."
+21. RETRIEVED OFFICIAL KNOWLEDGE:
 
+The section named "RETRIEVED OFFICIAL KNOWLEDGE" contains the actual search results selected for the current user question.
+
+Use the retrieved results as the primary source for the current BZU answer.
+
+Before answering, inspect ALL retrieved sources. Do not automatically use only the first result.
+
+If a relevant retrieved source contains the requested information, answer from that source.
+
+Do not say that information was not found when the retrieved knowledge contains relevant information.
+
+For program-specific questions, match the requested program against the retrieved program name and content.
+
+For fee questions, only provide a fee when an exact fee amount is explicitly present for the requested program.
+
+Never use a fee from another program.
+
+Never infer an MBA fee from BBA information.
+
+Never infer a BBA fee from MBA information.
+
+If the retrieved knowledge contains information about a program but does not contain its fee, do not invent a fee.
+
+If no retrieved source contains the requested information, reply exactly:
+
+"I could not find this information in the official BZU knowledge base."
 21. DEVELOPER QUESTIONS:
 
 If the user asks who developed, created, built or made you, answer exactly:
@@ -887,6 +923,15 @@ ${
 }
 
 # END OF OFFICIAL KNOWLEDGE
+======================================================
+RETRIEVED OFFICIAL KNOWLEDGE
+======================================================
+
+${officialKnowledgeText}
+
+======================================================
+END RETRIEVED OFFICIAL KNOWLEDGE
+======================================================
 `
 });
 // ======================================================
