@@ -1,0 +1,106 @@
+[
+  {
+    "role": "user",
+    "content": "WHO AM I"
+  },
+  {
+    "role": "assistant",
+    "content": "You are Sajjad Haider, a 3rd-semester student in the Artificial Intelligence department."
+  },
+  {
+    "role": "user",
+    "content": "WHO AM I"
+  },
+  {
+    "role": "assistant",
+    "content": "You are Sajjad Haider."
+  },
+  {
+    "role": "user",
+    "content": "Name: Sajjad Haider\nUniversity: Bahauddin Zakariya University\nSemester: 3rd\nDepartment: Artificial Intelligence\nCity: Multan\nEmail: sajjadhaider1016@gmail.com\nPhone: \n\n\nIdentity:\n\n- Your name is BZU AI Assistant.\n- You were developed by Sajjad Haider.\n- You help students with BZU information and general questions.\n\nRULES:\n\n1. Use User Memory ONLY when the user's question is about themselves.\n2. Never mention the user's university, semester, department, city, email or phone unless they explicitly ask.\n3. For BZU questions, completely ignore User Memory.\n4. Answer BZU questions ONLY from the Official Knowledge below.\n5. Do NOT use your own knowledge for BZU questions.\n6. If the answer exists in the Official Knowledge, provide it completely.\n7. Do NOT summarize lists unless the user asks for a summary.\n8. When the user asks about a topic (for example hostels, admissions, departments, scholarships, fees, contacts), list EVERY relevant item from the Official Knowledge. Do not stop after one or two examples. Continue until all matching information has been provided.\n9. If the information is not found in the Official Knowledge, reply exactly:\n\"I could not find this information in the official BZU knowledge base.\"\n10. For non-BZU questions, answer normally.\n11. Never answer with \"Here are some...\" when the Official Knowledge contains a complete list.\n\nDeveloper Questions:\n\nIf the user asks who developed, created, built or made you, answer exactly:\n\n\"I am the official BZU AI Assistant developed by Sajjad Haider.\"\n\nOfficial Knowledge:\n\nNo official BZU knowledge found.\n\n# END OF OFFICIAL KNOWLEDGE\n\nstop\n============= AI REPLY =============\nYou are Sajjad Haider.\n===================================="
+  },
+  {
+    "role": "assistant",
+    "content": "You are Sajjad Haider."
+  },
+  {
+    "role": "user",
+    "content": "LOL"
+  },
+  {
+    "role": "assistant",
+    "content": "It seems like you're having a good laugh. Would you like to ask something or just chat?"
+  },
+  {
+    "role": "user",
+    "content": "hi"
+  },
+  {
+    "role": "assistant",
+    "content": "Hello! It's nice to meet you. Is there something I can help you with or would you like to chat?"
+  },
+  {
+    "role": "user",
+    "content": "who am i"
+  },
+  {
+    "role": "assistant",
+    "content": "You are Sajjad Haider."
+  },
+  {
+    "role": "user",
+    "content": "who am i"
+  },
+  {
+    "role": "assistant",
+    "content": "You are Sajjad Haider."
+  },
+  {
+    "role": "user",
+    "content": "what is BZU?"
+  },
+  {
+    "role": "assistant",
+    "content": "I could not find this information in the official BZU knowledge base."
+  },
+  {
+    "role": "user",
+    "content": "what is BZU?"
+  },
+  {
+    "role": "assistant",
+    "content": "I could not find this information in the official BZU knowledge base."
+  },
+  {
+    "role": "user",
+    "content": "what is BZU?"
+  },
+  {
+    "role": "assistant",
+    "content": "I could not find this information in the official BZU knowledge base."
+  },
+  {
+    "role": "user",
+    "content": "what is bzu"
+  },
+  {
+    "role": "assistant",
+    "content": "I could not find this information in the official BZU knowledge base."
+  },
+  {
+    "role": "user",
+    "content": "what is BZU?"
+  },
+  {
+    "role": "assistant",
+    "content": "I could not find this information in the official BZU knowledge base."
+  },
+  {
+    "role": "user",
+    "content": "Who am I?"
+  },
+  {
+    "role": "assistant",
+    "content": "You are Sajjad Haider."
+  }
+]

@@ -1,6 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-
+const axios = require("axios");
 // Load knowledge.json once
 const knowledgePath = path.join(__dirname, "knowledge", "knowledge.json");
 
@@ -13,7 +13,17 @@ try {
     console.error("❌ Could not load knowledge.json");
     console.error(err);
 }
+async function createEmbedding(text) {
+    const response = await axios.post(
+        "http://localhost:11434/api/embeddings",
+        {
+            model: "nomic-embed-text",
+            prompt: text
+        }
+    );
 
+    return response.data.embedding;
+}
 function searchKnowledge(query) {
 
     if (!knowledge.length) {

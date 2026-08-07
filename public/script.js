@@ -1,11 +1,17 @@
 /* =====================================================
    BZU AI Assistant
    Developed by Sajjad Haider
-   Version 4.0
+   Version 5.0
 =====================================================*/
 
-// ================= ELEMENTS =================
 
+// ================= ELEMENTS =================
+let userId = localStorage.getItem("bzu_user_id");
+
+if (!userId) {
+    userId = crypto.randomUUID();
+    localStorage.setItem("bzu_user_id", userId);
+}
 const chatMessages = document.getElementById("chatMessages");
 const messageInput = document.getElementById("messageInput");
 const sendBtn = document.getElementById("sendBtn");
@@ -22,83 +28,184 @@ const chatContainer = document.getElementById("chatContainer");
 
 const typingIndicator = document.getElementById("typingIndicator");
 
+
 // Sidebar
 
 const newChatBtn = document.getElementById("newChatBtn");
-newChatBtn.addEventListener("click", newChat);
-// Theme
-
 const themeBtn = document.getElementById("themeBtn");
 const themeToggleBtn = document.getElementById("themeToggleBtn");
-
-// Settings
 
 const settingsBtn = document.getElementById("settingsBtn");
 const settingsModal = document.getElementById("settingsModal");
 
-// About
-
 const aboutBtn = document.getElementById("aboutBtn");
 const aboutModal = document.getElementById("aboutModal");
+
 
 // ================= STATE =================
 
 let currentChat = [];
 
-let chats = JSON.parse(localStorage.getItem("bzuChats")) || [];
+let chats =
+JSON.parse(localStorage.getItem("bzuChats")) || [];
 
 let isTyping = false;
 
+
+// ================= MEMORY =================
+
+let memory;
+
+try {
+
+    memory =
+        JSON.parse(
+            localStorage.getItem("bzuMemory")
+        ) ||
+
+        {
+
+            name: "",
+
+            university: "",
+
+            semester: "",
+
+            department: "",
+
+            city: "",
+
+            email: "",
+
+            phone: ""
+
+        };
+
+}
+
+catch {
+
+    memory = {
+
+        name: "",
+
+        university: "",
+
+        semester: "",
+
+        department: "",
+
+        city: "",
+
+        email: "",
+
+        phone: ""
+
+    };
+
+}
+
+
+// ================= SAVE MEMORY =================
+
+function saveMemory() {
+
+    localStorage.setItem(
+
+        "bzuMemory",
+
+        JSON.stringify(memory)
+
+    );
+
+}
+
+
+// ================= RESTORE CHAT =================
+
+function restoreLastChat() {
+
+    if (chats.length === 0) {
+
+        newChat();
+
+        return;
+
+    }
+
+    loadChat(chats[0]);
+
+}
+
+
 // ================= INITIAL UI =================
 
-// Always show chat
-
-// Initial UI
-
 welcomeScreen.style.display = "block";
+
 chatContainer.style.display = "flex";
-// Hide typing indicator
 
 typingIndicator.classList.add("hidden");
 
-// Load previous theme
 
-if (localStorage.getItem("theme") === "dark") {
+// ================= LOAD THEME =================
+
+if (
+
+    localStorage.getItem("theme") === "dark"
+
+) {
 
     document.body.classList.add("dark");
 
 }
 
-// Load history
+
+// ================= START BUTTONS =================
+
+newChatBtn.addEventListener(
+
+    "click",
+
+    newChat
+
+);
+
+
+// ================= HISTORY =================
 
 renderHistory();
-if (chats.length > 0) {
-    loadChat(chats[0]);      // open latest chat
-} else {
-    newChat();
-}
-/* =====================================================
+
+restoreLastChat();/* =====================================================
    PART 2 - MESSAGE RENDERING
 =====================================================*/
 
-// Scroll chat to bottom
+// ================= SCROLL =================
+
 function scrollToBottom() {
 
-    chatMessages.scrollTop = chatMessages.scrollHeight;
+    chatMessages.scrollTop =
+        chatMessages.scrollHeight;
 
 }
 
-// Current time
+
+// ================= TIME =================
+
 function getCurrentTime() {
 
     return new Date().toLocaleTimeString([], {
+
         hour: "2-digit",
+
         minute: "2-digit"
+
     });
 
 }
 
-// Typing indicator
+
+// ================= TYPING =================
+
 function showTyping() {
 
     typingIndicator.classList.remove("hidden");
@@ -113,26 +220,40 @@ function hideTyping() {
 
 }
 
-// Create message
+
+// ================= CREATE MESSAGE =================
+
 function createMessage(type, text) {
 
     const message = document.createElement("div");
 
     message.className = `message ${type}`;
 
-    const avatar = type === "user" ? "👤" : "🧠";
+    const avatar =
+
+        type === "user"
+
+            ? "👤"
+
+            : "🧠";
 
     let content = text;
 
-    // Markdown support
-    if (type === "ai" && typeof marked !== "undefined") {
+    if (
+
+        type === "ai" &&
+
+        typeof marked !== "undefined"
+
+    ) {
 
         content = marked.parse(text);
 
-    } else {
+    }
 
-        content = text
-            .replace(/\n/g, "<br>");
+    else {
+
+        content = text.replace(/\n/g, "<br>");
 
     }
 
@@ -148,9 +269,21 @@ function createMessage(type, text) {
 
             <div class="bubble-header">
 
-                <strong>${type === "user" ? "You" : "BZU AI"}</strong>
+                <strong>
 
-                <span>${getCurrentTime()}</span>
+                    ${type === "user"
+
+                        ? "You"
+
+                        : "BZU AI"}
+
+                </strong>
+
+                <span>
+
+                    ${getCurrentTime()}
+
+                </span>
 
             </div>
 
@@ -170,50 +303,73 @@ function createMessage(type, text) {
 
 }
 
-// Add user message
+
+// ================= HELPERS =================
+
 function addUserMessage(text) {
 
     createMessage("user", text);
 
 }
 
-// Add AI message
 function addAIMessage(text) {
 
     createMessage("ai", text);
 
 }
 
-// Clear chat
 function clearMessages() {
 
     chatMessages.innerHTML = "";
 
 }
 
-// Save chat
+
+// ================= SAVE CHAT =================
+
 function saveCurrentChat() {
 
     if (currentChat.length === 0) return;
 
-    // Update existing chat
-    if (chats.length > 0 && chats[0].id === currentChat.id) {
+    if (
 
-        chats[0].messages = [...currentChat];
-        chats[0].title = currentChat[0].text.substring(0, 40);
+        currentChat.id
+
+    ) {
+
+        const index = chats.findIndex(
+
+            c => c.id === currentChat.id
+
+        );
+
+        if (index !== -1) {
+
+            chats[index].messages =
+
+                [...currentChat];
+
+            chats[index].title =
+
+                currentChat[0].text.substring(0,40);
+
+        }
 
     }
 
-    // Create new chat
     else {
 
         const chat = {
 
             id: Date.now(),
 
-            title: currentChat[0].text.substring(0, 40),
+            title:
 
-            messages: [...currentChat]
+                currentChat[0].text.substring(0,40),
+
+            messages:
+
+                [...currentChat]
 
         };
 
@@ -230,33 +386,76 @@ function saveCurrentChat() {
     }
 
     localStorage.setItem(
+
         "bzuChats",
+
         JSON.stringify(chats)
+
     );
 
     renderHistory();
+
+}
+
+
+// ================= LOAD CHAT =================
+
+function loadChat(chat) {
+
+    clearMessages();
+
+    currentChat = [...chat.messages];
+
+    currentChat.id = chat.id;
+
+    currentChat.forEach(msg => {
+
+        if (msg.role === "user") {
+
+            addUserMessage(msg.text);
+
+        }
+
+        else {
+
+            addAIMessage(msg.text);
+
+        }
+
+    });
+
+    welcomeScreen.style.display = "none";
+
+    chatContainer.style.display = "flex";
+
+    scrollToBottom();
 
 }/* =====================================================
    PART 3 - SEND MESSAGE & AI API
 =====================================================*/
 
-// Send message
+
+// ================= SEND MESSAGE =================
 
 async function sendMessage() {
 
     const text = messageInput.value.trim();
-welcomeScreen.style.display = "none";
-chatContainer.style.display = "flex";
+
     if (!text || isTyping) return;
 
-    // Store user message
-    currentChat.push({
-        role: "user",
-        text
-    });
+    welcomeScreen.style.display = "none";
+    chatContainer.style.display = "flex";
 
+    currentChat.push({
+
+        role: "user",
+
+        text
+
+    });
+rememberUser(text);
     addUserMessage(text);
-chatContainer.style.display = "flex";
+
     messageInput.value = "";
 
     messageInput.style.height = "auto";
@@ -272,13 +471,20 @@ chatContainer.style.display = "flex";
             method: "POST",
 
             headers: {
+
                 "Content-Type": "application/json"
+
             },
 
             body: JSON.stringify({
-    messages: currentChat
-})
 
+    messages: currentChat,
+
+    memory: memory,
+
+    userId: userId
+
+})
         });
 
         if (!response.ok) {
@@ -289,36 +495,97 @@ chatContainer.style.display = "flex";
 
         const data = await response.json();
 
-console.log("SERVER RESPONSE:");
-console.log(JSON.stringify(data, null, 2));console.log(data);
-
         hideTyping();
 
         const aiReply =
+
             data.reply ||
+
             data.response ||
+
             data.message ||
-            "No response received.";
 
-      currentChat.push({
-    role: "assistant",
-    text: aiReply
-});
+            "No response.";
 
-addAIMessage(aiReply);
+        currentChat.push({
 
-if (chats.length > 0) {
+            role: "assistant",
 
-    chats[0].messages = [...currentChat];
-    chats[0].title = currentChat[0].text.substring(0, 40);
+            text: aiReply
 
-} else {
+        });
 
-    saveCurrentChat();
+        addAIMessage(aiReply);
 
-}
 
-localStorage.setItem("bzuChats", JSON.stringify(chats));
+
+        // ================= SAVE MEMORY =================
+
+        if (data.memory) {
+
+            memory = {
+
+                ...memory,
+
+                ...data.memory
+
+            };
+
+            saveMemory();
+
+        }
+
+
+
+        // ================= LEARN BASIC INFO =================
+
+        if (!memory.name) {
+
+            const m = text.match(/my name is (.+)/i);
+
+            if (m) {
+
+                memory.name = m[1];
+
+            }
+
+        }
+
+        if (!memory.semester) {
+
+            const m = text.match(/(\d+)(st|nd|rd|th)? semester/i);
+
+            if (m) {
+
+                memory.semester =
+
+                    m[1] + " Semester";
+
+            }
+
+        }
+
+        if (!memory.department) {
+
+            const m = text.match(/bs (.+)/i);
+
+            if (m) {
+
+                memory.department =
+
+                    "BS " + m[1];
+
+            }
+
+        }
+
+        saveMemory();
+
+
+
+        // ================= SAVE CHAT =================
+
+        saveCurrentChat();
 
     }
 
@@ -330,7 +597,7 @@ localStorage.setItem("bzuChats", JSON.stringify(chats));
 
         addAIMessage(
 
-            "❌ Unable to contact the AI server.\n\nPlease make sure the server is running."
+            "❌ Unable to contact AI server."
 
         );
 
@@ -344,9 +611,10 @@ localStorage.setItem("bzuChats", JSON.stringify(chats));
 
 }
 
+
+
 // ================= SEND BUTTON =================
-console.log("sendBtn =", sendBtn);
-console.log("messageInput =", messageInput);
+
 sendBtn.addEventListener(
 
     "click",
@@ -355,21 +623,23 @@ sendBtn.addEventListener(
 
 );
 
-// ================= ENTER TO SEND =================
+
+
+// ================= ENTER =================
 
 messageInput.addEventListener(
 
     "keydown",
 
-    function (e) {
+    function(e){
 
-        if (
+        if(
 
-            e.key === "Enter" &&
+            e.key==="Enter" &&
 
             !e.shiftKey
 
-        ) {
+        ){
 
             e.preventDefault();
 
@@ -381,23 +651,28 @@ messageInput.addEventListener(
 
 );
 
+
+
 // ================= AUTO RESIZE =================
 
 messageInput.addEventListener(
 
     "input",
 
-    function () {
+    function(){
 
-        this.style.height = "auto";
+        this.style.height="auto";
 
-        this.style.height = this.scrollHeight + "px";
+        this.style.height=
+
+            this.scrollHeight+"px";
 
     }
 
 );/* =====================================================
    PART 4 - HISTORY | NEW CHAT | THEME | SETTINGS
 =====================================================*/
+
 
 // ================= HISTORY =================
 
@@ -423,6 +698,16 @@ function renderHistory() {
 
         item.className = "history-item";
 
+        if (
+
+            currentChat.id === chat.id
+
+        ) {
+
+            item.classList.add("active");
+
+        }
+
         item.innerHTML = `
 
             <i class="fa-solid fa-message"></i>
@@ -435,6 +720,8 @@ function renderHistory() {
 
             loadChat(chat);
 
+            renderHistory();
+
         };
 
         history.appendChild(item);
@@ -443,81 +730,75 @@ function renderHistory() {
 
 }
 
-// ================= LOAD CHAT =================
 
-function loadChat(chat) {
 
-    clearMessages();
-
-    currentChat = [...chat.messages];
-
-    currentChat.forEach(msg => {
-
-        if (msg.role === "user") {
-
-            addUserMessage(msg.text);
-
-        } else {
-
-            addAIMessage(msg.text);
-
-        }
-
-    });
-
-    scrollToBottom();
-
-}
-function restoreLastChat() {
-
-    if (chats.length === 0) return;
-
-    loadChat(chats[0]);
-
-}
 // ================= NEW CHAT =================
 
 function newChat() {
 
     currentChat = [];
 
+    currentChat.id = null;
+
     clearMessages();
 
-  
+    welcomeScreen.style.display = "block";
+
+    chatContainer.style.display = "flex";
+
+    messageInput.focus();
+
 }
+
+
+
 // ================= CLEAR HISTORY =================
 
-if (document.getElementById("clearHistoryBtn")) {
+const clearHistoryBtn =
 
-    document
-        .getElementById("clearHistoryBtn")
-        .addEventListener("click", () => {
+document.getElementById("clearHistoryBtn");
 
-            if (!confirm("Clear all chat history?")) return;
+if (clearHistoryBtn) {
+
+    clearHistoryBtn.addEventListener(
+
+        "click",
+
+        () => {
+
+            if (
+
+                !confirm(
+
+                    "Delete all chats?"
+
+                )
+
+            ) return;
 
             chats = [];
 
-            localStorage.removeItem("bzuChats");
+            currentChat = [];
+
+            currentChat.id = null;
+
+            localStorage.removeItem(
+
+                "bzuChats"
+
+            );
 
             renderHistory();
-function showWelcomeChat(){
 
-    clearMessages();
+            newChat();
 
-    addAIMessage(
-`Hello! 👋
+        }
 
-I am BZU AI Assistant.
-
-Ask me anything about admissions, fee structure, departments, scholarships, transport, examinations or university rules.`
     );
 
 }
-            newChat();
 
-        });
 
-}
 
 // ================= THEME =================
 
@@ -525,13 +806,15 @@ function toggleTheme() {
 
     document.body.classList.toggle("dark");
 
-    const dark = document.body.classList.contains("dark");
-
     localStorage.setItem(
 
         "theme",
 
-        dark ? "dark" : "light"
+        document.body.classList.contains("dark")
+
+            ? "dark"
+
+            : "light"
 
     );
 
@@ -557,64 +840,150 @@ if (themeToggleBtn) {
 
 }
 
-// ================= SETTINGS MODAL =================
 
-settingsBtn.addEventListener("click", () => {
 
-    settingsModal.classList.remove("hidden");
+// ================= SETTINGS =================
 
-});
+settingsBtn.addEventListener(
 
-// ================= ABOUT MODAL =================
+    "click",
 
-aboutBtn.addEventListener("click", () => {
+    () => {
 
-    aboutModal.classList.remove("hidden");
+        settingsModal.classList.remove(
 
-});
+            "hidden"
 
-// ================= CLOSE MODALS =================
-
-document.querySelectorAll(".close-modal").forEach(btn => {
-
-    btn.addEventListener("click", () => {
-
-        settingsModal.classList.add("hidden");
-
-        aboutModal.classList.add("hidden");
-
-    });
-
-});
-
-// Close modal by clicking outside
-
-window.addEventListener("click", (e) => {
-
-    if (e.target === settingsModal) {
-
-        settingsModal.classList.add("hidden");
+        );
 
     }
 
-    if (e.target === aboutModal) {
+);
 
-        aboutModal.classList.add("hidden");
+
+
+// ================= ABOUT =================
+
+aboutBtn.addEventListener(
+
+    "click",
+
+    () => {
+
+        aboutModal.classList.remove(
+
+            "hidden"
+
+        );
 
     }
 
-});/* =====================================================
-   PART 5 - VOICE | FILE UPLOAD | QUICK BUTTONS
-   Developed by Sajjad Haider
+);
+
+
+
+// ================= CLOSE BUTTONS =================
+
+document.querySelectorAll(
+
+    ".close-modal"
+
+).forEach(btn => {
+
+    btn.addEventListener(
+
+        "click",
+
+        () => {
+
+            settingsModal.classList.add(
+
+                "hidden"
+
+            );
+
+            aboutModal.classList.add(
+
+                "hidden"
+
+            );
+
+        }
+
+    );
+
+});
+
+
+
+// ================= CLICK OUTSIDE =================
+
+window.addEventListener(
+
+    "click",
+
+    (e) => {
+
+        if (
+
+            e.target === settingsModal
+
+        ) {
+
+            settingsModal.classList.add(
+
+                "hidden"
+
+            );
+
+        }
+
+        if (
+
+            e.target === aboutModal
+
+        ) {
+
+            aboutModal.classList.add(
+
+                "hidden"
+
+            );
+
+        }
+
+    }
+
+);
+
+
+
+// ================= RESTORE LAST CHAT =================
+
+window.addEventListener(
+
+    "load",
+
+    () => {
+
+        renderHistory();
+
+        restoreLastChat();
+
+    }
+
+);/* =====================================================
+   PART 5 - FILE UPLOAD | VOICE | STARTUP
 =====================================================*/
+
 
 // ================= QUICK BUTTONS =================
 
-document.querySelectorAll(".quick-btn").forEach(button => {
+document.querySelectorAll(".quick-btn").forEach(btn=>{
 
-    button.addEventListener("click", () => {
+    btn.addEventListener("click",()=>{
 
-        messageInput.value = button.innerText;
+        messageInput.value=btn.innerText;
 
         sendMessage();
 
@@ -623,148 +992,240 @@ document.querySelectorAll(".quick-btn").forEach(button => {
 });
 
 
-// ================= FILE UPLOAD =================
-// ================= OPEN FILE PICKER =================
 
-uploadBtn.addEventListener("click", (e) => {
+// ================= FILE PICKER =================
+
+uploadBtn.addEventListener("click",(e)=>{
 
     e.preventDefault();
+
     e.stopPropagation();
 
-    fileInput.value = "";
+    fileInput.value="";
 
     fileInput.click();
 
 });
-fileInput.addEventListener("change", async () => {
 
-    console.log("Change event fired");
 
-    if (!fileInput.files.length) {
-        console.log("No file selected");
-        return;
-    }
 
-    const file = fileInput.files[0];
+// ================= FILE UPLOAD =================
 
-    console.log("File selected:", file);
+fileInput.addEventListener("change",async()=>{
 
-    const formData = new FormData();
-    formData.append("file", file);
+    if(!fileInput.files.length)return;
 
-    addUserMessage("📄 Uploaded: " + file.name);
+    const file=fileInput.files[0];
+
+    addUserMessage("📄 Uploaded: "+file.name);
 
     showTyping();
 
-    try {
+    const formData=new FormData();
 
-        console.log("Sending upload request...");
+    formData.append("file",file);
 
-    const response = await fetch("/upload", {
-    method: "POST",
-    body: formData
-});
+    try{
 
-console.log("Upload Status:", response.status);
+        const response=await fetch("/upload",{
 
-const text = await response.text();
+            method:"POST",
 
-console.log("Upload Response:", text);
+            body:formData
 
-if (!response.ok) {
-    throw new Error(text);
-}
+        });
 
-const data = JSON.parse(text);
-        console.log("Server Response:", data);
+        const text=await response.text();
+
+        if(!response.ok){
+
+            throw new Error(text);
+
+        }
+
+        const data=JSON.parse(text);
 
         hideTyping();
 
+        currentChat.push({
+
+            role:"user",
+
+            text:"📄 Uploaded: "+file.name
+
+        });
+
+        currentChat.push({
+
+            role:"assistant",
+
+            text:data.reply||
+
+                 data.message||
+
+                 "File uploaded successfully."
+
+        });
+
         addAIMessage(
-            data.reply ||
-            data.message ||
+
+            data.reply||
+
+            data.message||
+
             "File uploaded successfully."
+
         );
 
-    } catch (err) {
+        saveCurrentChat();
 
-    console.error(err);
+    }
 
-    hideTyping();
+    catch(err){
 
-    addAIMessage("❌ Upload failed:\n\n" + err.message);
+        hideTyping();
 
-}
+        console.error(err);
+
+        addAIMessage(
+
+            "❌ Upload failed.\n\n"+err.message
+
+        );
+
+    }
 
 });
 
-// ================= VOICE INPUT =================
 
-if (
 
-    "webkitSpeechRecognition" in window ||
+// ================= VOICE =================
 
-    "SpeechRecognition" in window
+if(
 
-) {
+    "SpeechRecognition" in window ||
 
-    const SpeechRecognition =
+    "webkitSpeechRecognition" in window
 
-        window.SpeechRecognition ||
+){
+
+    const SpeechRecognition=
+
+        window.SpeechRecognition||
 
         window.webkitSpeechRecognition;
 
-    const recognition = new SpeechRecognition();
+    const recognition=
 
-    recognition.lang = "en-US";
+        new SpeechRecognition();
 
-    recognition.interimResults = false;
+    recognition.lang="en-US";
 
-    recognition.maxAlternatives = 1;
+    recognition.interimResults=false;
 
-    voiceBtn.addEventListener("click", () => {
+    recognition.maxAlternatives=1;
 
-        recognition.start();
+    voiceBtn.addEventListener(
 
-        voiceBtn.innerHTML =
+        "click",
+
+        ()=>{
+
+            recognition.start();
+
+            voiceBtn.innerHTML=
 
             '<i class="fa-solid fa-microphone-lines"></i>';
 
-    });
+        }
 
-    recognition.onresult = function(event) {
+    );
 
-        messageInput.value =
+    recognition.onresult=function(e){
 
-            event.results[0][0].transcript;
+        messageInput.value=
 
-        voiceBtn.innerHTML =
+        e.results[0][0].transcript;
 
-            '<i class="fa-solid fa-microphone"></i>';
+        voiceBtn.innerHTML=
 
-    };
-
-    recognition.onerror = function() {
-
-        voiceBtn.innerHTML =
-
-            '<i class="fa-solid fa-microphone"></i>';
+        '<i class="fa-solid fa-microphone"></i>';
 
     };
 
-    recognition.onend = function() {
+    recognition.onerror=function(){
 
-        voiceBtn.innerHTML =
+        voiceBtn.innerHTML=
 
-            '<i class="fa-solid fa-microphone"></i>';
+        '<i class="fa-solid fa-microphone"></i>';
 
     };
 
-} else {
+    recognition.onend=function(){
 
-    voiceBtn.style.display = "none";
+        voiceBtn.innerHTML=
+
+        '<i class="fa-solid fa-microphone"></i>';
+
+    };
 
 }
+
+else{
+
+    voiceBtn.style.display="none";
+
+}
+
+
+
+// ================= CHATGPT STYLE MEMORY =================
+
+function rememberUser(text){
+
+    const lower=text.toLowerCase();
+
+    if(lower.includes("my name is")){
+
+        memory.name=
+
+        text.split(/my name is/i)[1].trim();
+
+    }
+
+    if(lower.includes("i study in")){
+
+        memory.university=
+
+        text.split(/i study in/i)[1].trim();
+
+    }
+
+    if(lower.includes("semester")){
+
+        memory.semester=text;
+
+    }
+
+    if(lower.includes("department")){
+
+        memory.department=text;
+
+    }
+
+    if(lower.includes("my city is")){
+
+        memory.city=
+
+        text.split(/my city is/i)[1].trim();
+
+    }
+
+    saveMemory();
+
+}
+
+
 
 // ================= STARTUP =================
 
@@ -773,9 +1234,23 @@ renderHistory();
 restoreLastChat();
 
 messageInput.focus();
-console.log("=======================================");
+
+
+
+console.log("====================================");
+
 console.log("BZU AI Assistant");
-console.log("Version 4.0");
+
 console.log("Developed by Sajjad Haider");
-console.log("AI & Full Stack Developer");
-console.log("=======================================");
+
+console.log("Version 5.0");
+
+console.log("Memory Enabled");
+
+console.log("History Enabled");
+
+console.log("Upload Enabled");
+
+console.log("Voice Enabled");
+
+console.log("====================================");
