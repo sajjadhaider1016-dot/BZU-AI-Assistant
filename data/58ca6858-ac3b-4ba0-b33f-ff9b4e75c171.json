@@ -1,6 +1,46 @@
 [
   {
     "role": "user",
+    "content": "what is BZU?"
+  },
+  {
+    "role": "assistant",
+    "content": "I could not find this information in the official BZU knowledge base."
+  },
+  {
+    "role": "user",
+    "content": "what is BZU?"
+  },
+  {
+    "role": "assistant",
+    "content": "I could not find this information in the official BZU knowledge base."
+  },
+  {
+    "role": "user",
+    "content": "what is bzu"
+  },
+  {
+    "role": "assistant",
+    "content": "I could not find this information in the official BZU knowledge base."
+  },
+  {
+    "role": "user",
+    "content": "what is BZU?"
+  },
+  {
+    "role": "assistant",
+    "content": "I could not find this information in the official BZU knowledge base."
+  },
+  {
+    "role": "user",
+    "content": "Who am I?"
+  },
+  {
+    "role": "assistant",
+    "content": "You are Sajjad Haider."
+  },
+  {
+    "role": "user",
     "content": "WHO AM I"
   },
   {
@@ -98,6 +138,78 @@
   {
     "role": "user",
     "content": "Who am I?"
+  },
+  {
+    "role": "assistant",
+    "content": "You are Sajjad Haider."
+  },
+  {
+    "role": "user",
+    "content": "What departments does BZU have?"
+  },
+  {
+    "role": "assistant",
+    "content": "Bahauddin Zakariya University (BZU) has many departments including Artificial Intelligence, Computer Science, Information Technology, Mathematics, Physics, Chemistry, English, Economics, Business Administration, Law, Pharmacy, Education, Agriculture, Engineering and other academic departments."
+  },
+  {
+    "role": "user",
+    "content": "what ias bzu"
+  },
+  {
+    "role": "assistant",
+    "content": "I could not find this information in the official BZU knowledge base."
+  },
+  {
+    "role": "user",
+    "content": "bzu?"
+  },
+  {
+    "role": "assistant",
+    "content": "I could not find this information in the official BZU knowledge base."
+  },
+  {
+    "role": "user",
+    "content": "what is bzu"
+  },
+  {
+    "role": "assistant",
+    "content": "I could not find this information in the official BZU knowledge base."
+  },
+  {
+    "role": "user",
+    "content": "what is bzu"
+  },
+  {
+    "role": "assistant",
+    "content": "I could not find this information in the official BZU knowledge base."
+  },
+  {
+    "role": "user",
+    "content": "What is BZU?"
+  },
+  {
+    "role": "assistant",
+    "content": "Bahauddin Zakariya University (BZU) is a public university located in Multan, Pakistan. It is one of the major universities in the region and offers undergraduate, postgraduate and doctoral programs in various fields including sciences, arts, engineering, business, law and technology. \n\nBZU has many departments including Artificial Intelligence, Computer Science, Information Technology, Mathematics, Physics, Chemistry, English, Economics, Business Administration, Law, Pharmacy, Education, Agriculture, Engineering and other academic departments."
+  },
+  {
+    "role": "user",
+    "content": "what is bzu"
+  },
+  {
+    "role": "assistant",
+    "content": "Bahauddin Zakariya University (BZU) is a public university located in Multan, Pakistan."
+  },
+  {
+    "role": "user",
+    "content": "What departments are available?"
+  },
+  {
+    "role": "assistant",
+    "content": "According to the official knowledge, the following departments are available at Bahauddin Zakariya University (BZU):\n\n1. Agronomy\n2. Entomology\n3. Forestry & Range Management\n4. Horticulture\n5. Plant Breeding & Genetics\n6. Plant Pathology\n7. Soil Science\n8. Agricultural Engineering"
+  },
+  {
+    "role": "user",
+    "content": "who am i"
   },
   {
     "role": "assistant",

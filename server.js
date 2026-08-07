@@ -91,15 +91,13 @@ const client = new OpenAI({
 // CONFIG
 // ======================================================
 
-
-const AI_MODEL =
-"llama-3.3-70b-versatile";
+const AI_MODEL = "llama-3.1-8b-instant";
 
 
-const MAX_CHAT_TOKENS = 2000;
+const MAX_CHAT_TOKENS = 800;
 
 
-const MAX_DOCUMENT_TOKENS = 1200;
+const MAX_DOCUMENT_TOKENS = 1000;
 
 
 
