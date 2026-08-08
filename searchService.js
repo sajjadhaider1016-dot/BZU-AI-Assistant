@@ -24,6 +24,7 @@ try {
     knowledge = [];
 }
 
+
 // ==========================================
 // NORMALIZE TEXT
 // ==========================================
@@ -35,6 +36,104 @@ function normalize(text) {
         .replace(/\s+/g, " ")
         .trim();
 }
+
+
+// ==========================================
+// IMPORTANT / GENERIC WORDS
+// ==========================================
+
+const stopWords = new Set([
+    "what",
+    "is",
+    "the",
+    "of",
+    "at",
+    "in",
+    "for",
+    "on",
+    "and",
+    "to",
+    "a",
+    "an",
+    "according",
+    "tell",
+    "me",
+    "please",
+    "can",
+    "you",
+    "does",
+    "do",
+    "how",
+    "much",
+    "many",
+    "which",
+    "where",
+    "when",
+    "who",
+    "bzu",
+    "university"
+]);
+
+
+// ==========================================
+// PROGRAM TERMS
+// ==========================================
+
+const programTerms = [
+    "bba hons ims",
+    "bba hons ibf",
+    "bba hons",
+    "bba",
+    "bs artificial intelligence",
+    "artificial intelligence",
+    "computer science",
+    "information technology",
+    "software engineering",
+    "data analytics",
+    "accounting finance",
+    "accounting and finance",
+    "banking finance",
+    "banking and finance",
+    "e commerce",
+    "ecommerce",
+    "digital marketing",
+    "business digital marketing",
+    "fin tech",
+    "fintech",
+    "supply chain management",
+    "entrepreneurship",
+    "financial analytics",
+    "telecommunications",
+    "telecommunication",
+    "microbiology",
+    "biochemistry",
+    "mathematics",
+    "physics",
+    "chemistry",
+    "botany",
+    "zoology",
+    "pharm d",
+    "pharmd"
+];
+
+
+// ==========================================
+// FACULTY TERMS
+// ==========================================
+
+const facultyTerms = [
+    "faculty of arts",
+    "faculty of sciences",
+    "faculty of science",
+    "faculty of commerce",
+    "faculty of commerce banking business administration",
+    "faculty of engineering",
+    "faculty of law",
+    "faculty of education",
+    "faculty of pharmacy",
+    "faculty of agricultural sciences"
+];
+
 
 // ==========================================
 // SEARCH KNOWLEDGE
@@ -53,61 +152,58 @@ function searchKnowledge(query) {
         return [];
     }
 
-    const keywords = normalizedQuery
-        .split(/\s+/)
-        .filter(word => word.length > 2);
-
-    // ======================================
-    // IMPORTANT PROGRAM TERMS
-    // ======================================
-
-    const programTerms = [
-        "bba",
-        "bba hons",
-        "bba ims",
-        "bba ibf",
-        "pharm d",
-        "pharmd",
-        "artificial intelligence",
-        "bs artificial intelligence",
-        "computer science",
-        "information technology",
-        "software engineering",
-        "data analytics",
-        "accounting finance",
-        "banking finance",
-        "e commerce",
-        "digital marketing",
-        "telecommunication",
-        "microbiology",
-        "biochemistry",
-        "mathematics",
-        "physics",
-        "chemistry",
-        "botany",
-        "zoology"
-    ];
-
-    const detectedPrograms = programTerms
-        .filter(term => normalizedQuery.includes(term));
 
     // ======================================
     // QUESTION TYPE
     // ======================================
 
     const isFeeQuestion =
-        /\bfee\b|\bfees\b|\btuition\b|\bcost\b|\bcharges\b|\bsemester fee\b/
+        /\bfee\b|\bfees\b|\btuition\b|\bcost\b|\bcharges\b|\bprice\b|\bsemester fee\b|\b1st semester\b|\b2nd semester\b/
             .test(normalizedQuery);
 
     const isAdmissionQuestion =
-        /\badmission\b|\badmissions\b|\bapply\b|\bapplication\b|\beligibility\b/
+        /\badmission\b|\badmissions\b|\bapply\b|\bapplication\b|\beligibility\b|\bmerit\b/
             .test(normalizedQuery);
 
     const isCalendarQuestion =
         /\bcalendar\b|\bsemester\b|\bfall\b|\bspring\b|\bmid term\b|\bfinal exam\b|\bexamination\b/
             .test(normalizedQuery);
 
+    const isDepartmentQuestion =
+        /\bdepartment\b|\bdepartments\b|\bfaculty\b|\bfaculties\b|\binstitute\b|\binstitutes\b|\bcenter\b|\bcenters\b|\bschool\b|\bschools\b/
+            .test(normalizedQuery);
+
+
+    // ======================================
+    // DETECT PROGRAM
+    // ======================================
+
+    const detectedPrograms = programTerms
+        .filter(term => normalizedQuery.includes(term));
+
+
+    // ======================================
+    // DETECT FACULTY
+    // ======================================
+
+    const detectedFaculties = facultyTerms
+        .filter(term => normalizedQuery.includes(term));
+
+
+    // ======================================
+    // IMPORTANT QUERY WORDS
+    // ======================================
+
+    const keywords = normalizedQuery
+        .split(/\s+/)
+        .filter(word =>
+            word.length > 2 &&
+            !stopWords.has(word)
+        );
+
+
     const results = [];
+
 
     // ======================================
     // SCORE EACH KNOWLEDGE ENTRY
@@ -122,36 +218,79 @@ function searchKnowledge(query) {
 
         let score = 0;
 
+
         // ==================================
-        // EXACT QUERY MATCH
+        // EXACT QUERY
         // ==================================
 
         if (title === normalizedQuery) {
-            score += 50000;
+            score += 100000;
         }
 
         if (title.includes(normalizedQuery)) {
-            score += 25000;
+            score += 50000;
         }
 
         if (text.includes(normalizedQuery)) {
-            score += 15000;
+            score += 20000;
         }
+
+
+        // ==================================
+        // QUERY PHRASES
+        // ==================================
+
+        for (let i = 0; i < keywords.length - 1; i++) {
+
+            const phrase = `${keywords[i]} ${keywords[i + 1]}`;
+
+            if (title.includes(phrase)) {
+                score += 12000;
+            }
+
+            if (text.includes(phrase)) {
+                score += 4000;
+            }
+        }
+
 
         // ==================================
         // KEYWORD MATCHING
         // ==================================
 
+        let matchedKeywords = 0;
+
         for (const word of keywords) {
 
+            let matched = false;
+
             if (title.includes(word)) {
-                score += 2500;
+                score += 5000;
+                matched = true;
             }
 
             if (text.includes(word)) {
-                score += 500;
+                score += 800;
+                matched = true;
+            }
+
+            if (matched) {
+                matchedKeywords++;
             }
         }
+
+
+        // ==================================
+        // ALL QUERY KEYWORDS MATCH
+        // ==================================
+
+        if (
+            keywords.length > 0 &&
+            matchedKeywords === keywords.length
+        ) {
+            score += 15000;
+        }
+
 
         // ==================================
         // PROGRAM-SPECIFIC BOOST
@@ -160,50 +299,49 @@ function searchKnowledge(query) {
         for (const program of detectedPrograms) {
 
             if (title.includes(program)) {
-                score += 30000;
+                score += 60000;
             }
 
             if (text.includes(program)) {
+                score += 25000;
+            }
+
+
+            // Strong boost when program + fee
+            if (isFeeQuestion) {
+
+                if (
+                    title.includes(program) &&
+                    title.includes("fee")
+                ) {
+                    score += 80000;
+                }
+
+                if (
+                    text.includes(program) &&
+                    text.includes("fee")
+                ) {
+                    score += 30000;
+                }
+            }
+        }
+
+
+        // ==================================
+        // FACULTY BOOST
+        // ==================================
+
+        for (const faculty of detectedFaculties) {
+
+            if (title.includes(faculty)) {
+                score += 50000;
+            }
+
+            if (text.includes(faculty)) {
                 score += 12000;
             }
         }
 
-        // ==================================
-        // BBA SPECIAL MATCH
-        // ==================================
-
-        if (normalizedQuery.includes("bba")) {
-
-            if (title.includes("bba")) {
-                score += 40000;
-            }
-
-            if (text.includes("bba")) {
-                score += 15000;
-            }
-
-            if (title.includes("bba hons")) {
-                score += 10000;
-            }
-
-            if (text.includes("bba hons")) {
-                score += 5000;
-            }
-
-            if (
-                text.includes("75 483") ||
-                text.includes("80 224")
-            ) {
-                score += 10000;
-            }
-
-            if (
-                text.includes("bba hons ims") &&
-                text.includes("bs evening")
-            ) {
-                score += 15000;
-            }
-        }
 
         // ==================================
         // FEE QUESTION BOOST
@@ -212,7 +350,14 @@ function searchKnowledge(query) {
         if (isFeeQuestion) {
 
             if (title.includes("fee")) {
-                score += 12000;
+                score += 15000;
+            }
+
+            if (
+                title.includes("fee structure") ||
+                title.includes("fees structure")
+            ) {
+                score += 20000;
             }
 
             if (text.includes("fee")) {
@@ -223,40 +368,46 @@ function searchKnowledge(query) {
                 text.includes("first semester fee") ||
                 text.includes("1st semester fee")
             ) {
-                score += 3000;
+                score += 4000;
             }
 
             if (
                 text.includes("second semester fee") ||
                 text.includes("2nd semester fee")
             ) {
-                score += 3000;
+                score += 4000;
             }
         }
 
+
         // ==================================
-        // ADMISSION QUESTION BOOST
+        // ADMISSION BOOST
         // ==================================
 
         if (isAdmissionQuestion) {
 
             if (title.includes("admission")) {
-                score += 12000;
+                score += 20000;
             }
 
             if (text.includes("admission")) {
-                score += 3000;
+                score += 4000;
+            }
+
+            if (title.includes("eligibility")) {
+                score += 15000;
             }
         }
 
+
         // ==================================
-        // CALENDAR QUESTION BOOST
+        // CALENDAR BOOST
         // ==================================
 
         if (isCalendarQuestion) {
 
             if (title.includes("calendar")) {
-                score += 20000;
+                score += 30000;
             }
 
             if (text.includes("academic calendar")) {
@@ -268,20 +419,56 @@ function searchKnowledge(query) {
             }
         }
 
+
         // ==================================
-        // ALL IMPORTANT KEYWORDS MATCH
+        // DEPARTMENT QUESTION
         // ==================================
 
-        const matchingKeywords = keywords.filter(word =>
-            combined.includes(word)
-        );
+        if (isDepartmentQuestion) {
 
-        if (
-            keywords.length > 0 &&
-            matchingKeywords.length === keywords.length
-        ) {
-            score += 8000;
+            // Prefer entries explicitly about departments
+            if (title.includes("department")) {
+                score += 30000;
+            }
+
+            // Prefer faculty / department listings
+            if (
+                title.includes("facult") ||
+                title.includes("department") ||
+                title.includes("institute") ||
+                title.includes("center") ||
+                title.includes("school")
+            ) {
+                score += 15000;
+            }
+
+            // Penalize generic prospectus pages
+            if (
+                title.includes("overview") ||
+                title === "page 17" ||
+                title.startsWith("page ")
+            ) {
+                score -= 15000;
+            }
         }
+
+
+        // ==================================
+        // GENERIC PAGE PENALTY
+        // ==================================
+
+        if (/^page\s+\d+$/i.test(title)) {
+
+            score -= 5000;
+
+            // Generic pages should only rank highly
+            // if their text actually contains many
+            // relevant query terms.
+            if (matchedKeywords < 2) {
+                score -= 10000;
+            }
+        }
+
 
         // ==================================
         // STORE RESULT
@@ -297,11 +484,13 @@ function searchKnowledge(query) {
         }
     }
 
+
     // ======================================
-    // SORT BY RELEVANCE
+    // SORT
     // ======================================
 
     results.sort((a, b) => b.score - a.score);
+
 
     // ======================================
     // DEBUG
@@ -313,20 +502,15 @@ function searchKnowledge(query) {
     console.log("Query:", originalQuery);
 
     results.slice(0, 5).forEach((item, index) => {
+
         console.log(
             `${index + 1}. ${item.score} | ${item.title}`
         );
+
     });
 
     console.log("==============================\n");
 
-    // ======================================
-    // NO RESULTS
-    // ======================================
-
-    if (results.length === 0) {
-        return [];
-    }
 
     // ======================================
     // RETURN TOP RESULTS
@@ -334,6 +518,7 @@ function searchKnowledge(query) {
 
     return results.slice(0, 5);
 }
+
 
 // ==========================================
 // EXPORT
