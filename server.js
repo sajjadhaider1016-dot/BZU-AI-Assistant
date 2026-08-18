@@ -93,8 +93,8 @@ const client = new OpenAI({
 // ======================================================
 
 const AI_MODEL =
-    process.env.AI_MODEL || "openai/gpt-oss-120b";
-    
+    process.env.AI_MODEL || "llama-3.3-70b-versatile";
+
 const MAX_CHAT_TOKENS = 800;
 
 const MAX_DOCUMENT_TOKENS = 1000;
@@ -1516,11 +1516,11 @@ app.use(
 // START SERVER
 // ======================================================
 
-const PORT = process.env.PORT || 3000;
+const PORT =
+    process.env.PORT || 3000;
 
 app.listen(
     PORT,
-    "0.0.0.0",
     () => {
 
         console.clear();
@@ -1538,7 +1538,7 @@ app.listen(
         );
 
         console.log(
-            `🚀 Server      : http://0.0.0.0:${PORT}`
+            `🚀 Server      : http://localhost:${PORT}`
         );
 
         console.log(
@@ -1592,8 +1592,8 @@ app.listen(
         console.log(
             "===================================================="
         );
-    }
-);
+    });
+
 // ======================================================
 // END SERVER.JS
 // ======================================================
