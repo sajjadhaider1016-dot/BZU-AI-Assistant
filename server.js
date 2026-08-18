@@ -1516,11 +1516,11 @@ app.use(
 // START SERVER
 // ======================================================
 
-const PORT =
-    process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000;
 
 app.listen(
     PORT,
+    "0.0.0.0",
     () => {
 
         console.clear();
@@ -1538,7 +1538,7 @@ app.listen(
         );
 
         console.log(
-            `🚀 Server      : http://localhost:${PORT}`
+            `🚀 Server      : http://0.0.0.0:${PORT}`
         );
 
         console.log(
@@ -1592,8 +1592,8 @@ app.listen(
         console.log(
             "===================================================="
         );
-    });
-
+    }
+);
 // ======================================================
 // END SERVER.JS
 // ======================================================
