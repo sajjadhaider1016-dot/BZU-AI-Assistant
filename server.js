@@ -93,7 +93,7 @@ const client = new OpenAI({
 // ======================================================
 
 const AI_MODEL =
-    process.env.AI_MODEL || "llama-3.3-70b-versatile";
+    process.env.AI_MODEL || "openai/gpt-oss-120b";
 
 const MAX_CHAT_TOKENS = 800;
 
