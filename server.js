@@ -8,6 +8,9 @@ require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
+const session = require("express-session");
+const bcrypt = require("bcryptjs");
+const prisma = require("./lib/prisma");
 const OpenAI = require("openai");
 const multer = require("multer");
 const pdfParse = require("pdf-parse");
@@ -19,13 +22,14 @@ const path = require("path");
 
 const memoryService = require("./memoryService");
 const { searchKnowledge } = require("./searchService");
-
+const authRoutes = require("./auth");
 // ======================================================
 // EXPRESS APP
 // ======================================================
 
 const app = express();
-
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 // ======================================================
 // DIRECTORIES
 // ======================================================
@@ -46,7 +50,19 @@ if (!fs.existsSync(dataDirectory)) {
 // ======================================================
 
 app.use(cors());
-
+app.use(
+    session({
+        secret: process.env.SESSION_SECRET || "bzu-ai-development-secret",
+        resave: false,
+        saveUninitialized: false,
+        cookie: {
+            httpOnly: true,
+            secure: false,
+            maxAge: 1000 * 60 * 60 * 24 * 7
+        }
+    })
+);
+app.use("/api/auth", authRoutes);
 app.use(
     express.json({
         limit: "20mb"

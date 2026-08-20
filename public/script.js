@@ -6,12 +6,7 @@
 
 
 // ================= ELEMENTS =================
-let userId = localStorage.getItem("bzu_user_id");
-
-if (!userId) {
-    userId = crypto.randomUUID();
-    localStorage.setItem("bzu_user_id", userId);
-}
+let userId = null;
 const chatMessages = document.getElementById("chatMessages");
 const messageInput = document.getElementById("messageInput");
 const sendBtn = document.getElementById("sendBtn");
@@ -46,12 +41,60 @@ const aboutModal = document.getElementById("aboutModal");
 
 let currentChat = [];
 
-let chats =
-JSON.parse(localStorage.getItem("bzuChats")) || [];
-
+let chats = [];
 let isTyping = false;
 
+// ================= LOAD USER CHATS =================
 
+async function loadUserChats() {
+
+    try {
+
+        const response = await fetch("/api/auth/me", {
+            credentials: "include"
+        });
+
+        if (!response.ok) {
+
+            chats = [];
+
+            return;
+
+        }
+
+        const data = await response.json();
+
+        if (!data.user || !data.user.id) {
+
+            chats = [];
+
+            return;
+
+        }
+
+        userId = data.user.id;
+
+        const storageKey = `bzuChats_${userId}`;
+
+        chats =
+            JSON.parse(
+                localStorage.getItem(storageKey)
+            ) || [];
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "Unable to load user chats:",
+            error
+        );
+
+        chats = [];
+
+    }
+
+}
 // ================= MEMORY =================
 
 let memory;
@@ -385,14 +428,14 @@ function saveCurrentChat() {
 
     }
 
+    if (userId) {
+
     localStorage.setItem(
-
-        "bzuChats",
-
+        `bzuChats_${userId}`,
         JSON.stringify(chats)
-
     );
 
+}
     renderHistory();
 
 }
@@ -781,13 +824,13 @@ if (clearHistoryBtn) {
             currentChat = [];
 
             currentChat.id = null;
+if (userId) {
 
-            localStorage.removeItem(
+    localStorage.removeItem(
+        `bzuChats_${userId}`
+    );
 
-                "bzuChats"
-
-            );
-
+}
             renderHistory();
 
             newChat();
@@ -1254,3 +1297,248 @@ console.log("Upload Enabled");
 console.log("Voice Enabled");
 
 console.log("====================================");
+// =====================================================
+// BZU AI AUTHENTICATION
+// =====================================================
+
+document.addEventListener("DOMContentLoaded", () => {
+
+    const authScreen = document.getElementById("authScreen");
+
+    if (!authScreen) return;
+
+    const loginForm = document.getElementById("loginForm");
+    const signupForm = document.getElementById("signupForm");
+
+    const showSignup = document.getElementById("showSignup");
+    const showLogin = document.getElementById("showLogin");
+
+    const loginFormElement =
+        document.getElementById("loginFormElement");
+
+    const signupFormElement =
+        document.getElementById("signupFormElement");
+
+    const loginMessage =
+        document.getElementById("loginMessage");
+
+    const signupMessage =
+        document.getElementById("signupMessage");
+
+
+    // -----------------------------------------------
+    // SWITCH LOGIN / SIGNUP
+    // -----------------------------------------------
+
+    showSignup?.addEventListener("click", () => {
+
+        loginForm.style.display = "none";
+        signupForm.style.display = "block";
+
+        loginMessage.textContent = "";
+    });
+
+
+    showLogin?.addEventListener("click", () => {
+
+        signupForm.style.display = "none";
+        loginForm.style.display = "block";
+
+        signupMessage.textContent = "";
+    });
+
+
+    // -----------------------------------------------
+    // LOGIN
+    // -----------------------------------------------
+
+    loginFormElement?.addEventListener("submit", async (event) => {
+
+        event.preventDefault();
+
+        const email =
+            document.getElementById("loginEmail").value;
+
+        const password =
+            document.getElementById("loginPassword").value;
+
+        loginMessage.textContent = "Signing in...";
+
+        try {
+
+            const response = await fetch("/api/auth/login", {
+
+                method: "POST",
+
+                headers: {
+                    "Content-Type": "application/json"
+                },
+
+                credentials: "include",
+
+                body: JSON.stringify({
+                    email,
+                    password
+                })
+
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    data.message || "Login failed."
+                );
+            }
+
+            loginMessage.textContent =
+                "Login successful. Loading...";
+
+            setTimeout(() => {
+
+                authScreen.style.display = "none";
+
+                window.location.reload();
+
+            }, 500);
+
+        } catch (error) {
+
+            loginMessage.textContent =
+                error.message;
+
+        }
+
+    });
+
+
+    // -----------------------------------------------
+    // SIGNUP
+    // -----------------------------------------------
+
+    signupFormElement?.addEventListener("submit", async (event) => {
+
+        event.preventDefault();
+
+        const name =
+            document.getElementById("signupName").value;
+
+        const email =
+            document.getElementById("signupEmail").value;
+
+        const password =
+            document.getElementById("signupPassword").value;
+
+        signupMessage.textContent =
+            "Creating account...";
+
+        try {
+
+            const response = await fetch("/api/auth/signup", {
+
+                method: "POST",
+
+                headers: {
+                    "Content-Type": "application/json"
+                },
+
+                credentials: "include",
+
+                body: JSON.stringify({
+                    name,
+                    email,
+                    password
+                })
+
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    data.message || "Signup failed."
+                );
+            }
+
+            signupMessage.textContent =
+                "Account created. Loading...";
+
+            setTimeout(() => {
+
+                authScreen.style.display = "none";
+
+                window.location.reload();
+
+            }, 500);
+
+        } catch (error) {
+
+            signupMessage.textContent =
+                error.message;
+
+        }
+
+    });
+
+
+    // -----------------------------------------------
+    // CHECK EXISTING SESSION
+    // -----------------------------------------------
+fetch("/api/auth/me", {
+    credentials: "include"
+})
+    .then(async response => {
+
+        if (response.ok) {
+
+            await loadUserChats();
+
+            renderHistory();
+
+            authScreen.style.display = "none";
+
+            restoreLastChat();
+
+        } else {
+
+            authScreen.style.display = "flex";
+
+        }
+
+    })
+    .catch(() => {
+
+        authScreen.style.display = "flex";
+
+    });
+
+});// =========================================
+// LOGOUT
+// =========================================
+
+const logoutBtn = document.getElementById("logoutBtn");
+
+if (logoutBtn) {
+    logoutBtn.addEventListener("click", async () => {
+
+        try {
+            const response = await fetch("/api/auth/logout", {
+                method: "POST",
+                credentials: "include"
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                window.location.reload();
+            } else {
+                alert(data.message || "Unable to logout.");
+            }
+
+        } catch (error) {
+            console.error("LOGOUT ERROR:", error);
+            alert("Unable to logout. Please try again.");
+        }
+
+    });
+}
