@@ -2,4 +2,6 @@ node_modules/
 .env
 dev.db
 prisma/dev.db
-.prisma/
+.prisma/.agents/
+.claude/
+.windsurf/
