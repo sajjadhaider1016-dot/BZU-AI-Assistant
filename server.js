@@ -91,14 +91,16 @@ const client = new OpenAI({
 // ======================================================
 // CONFIGURATION
 // ======================================================
-
 const AI_MODEL =
     process.env.AI_MODEL || "openai/gpt-oss-120b";
 
+console.log("=================================");
+console.log("ENV AI_MODEL:", process.env.AI_MODEL);
+console.log("ACTIVE MODEL:", AI_MODEL);
+console.log("=================================");
+
 const MAX_CHAT_TOKENS = 800;
-
 const MAX_DOCUMENT_TOKENS = 1000;
-
 // ======================================================
 // CLEAN QUERY
 // ======================================================
