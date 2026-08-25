@@ -3,15 +3,21 @@
    Developed by Sajjad Haider
    Version 5.0
 =====================================================*/
-
-
 // ================= ELEMENTS =================
+
 let userId = null;
+
+
+// ================= CHAT ELEMENTS =================
+
 const chatMessages = document.getElementById("chatMessages");
+
 const messageInput = document.getElementById("messageInput");
+
 const sendBtn = document.getElementById("sendBtn");
 
 const uploadBtn = document.getElementById("uploadBtn");
+
 const fileInput = document.getElementById("fileInput");
 
 const voiceBtn = document.getElementById("voiceBtn");
@@ -19,24 +25,34 @@ const voiceBtn = document.getElementById("voiceBtn");
 const history = document.getElementById("history");
 
 const welcomeScreen = document.getElementById("welcomeScreen");
+
 const chatContainer = document.getElementById("chatContainer");
 
 const typingIndicator = document.getElementById("typingIndicator");
 
 
-// Sidebar
+// ================= SIDEBAR ELEMENTS =================
 
 const newChatBtn = document.getElementById("newChatBtn");
+
 const themeBtn = document.getElementById("themeBtn");
+
 const themeToggleBtn = document.getElementById("themeToggleBtn");
 
 const settingsBtn = document.getElementById("settingsBtn");
+
 const settingsModal = document.getElementById("settingsModal");
 
 const aboutBtn = document.getElementById("aboutBtn");
+
 const aboutModal = document.getElementById("aboutModal");
 
 
+// ================= MOBILE NAVIGATION =================
+
+const mobileMenuBtn = document.getElementById("mobileMenuBtn");
+
+const sidebar = document.querySelector(".sidebar");
 // ================= STATE =================
 
 let currentChat = [];
@@ -712,9 +728,9 @@ messageInput.addEventListener(
 
     }
 
-);/* =====================================================
+);/* /* =====================================================
    PART 4 - HISTORY | NEW CHAT | THEME | SETTINGS
-=====================================================*/
+===================================================== */
 
 
 // ================= HISTORY =================
@@ -732,8 +748,8 @@ function renderHistory() {
         `;
 
         return;
-
     }
+
 
     chats.forEach(chat => {
 
@@ -741,15 +757,13 @@ function renderHistory() {
 
         item.className = "history-item";
 
-        if (
 
-            currentChat.id === chat.id
-
-        ) {
+        if (currentChat.id === chat.id) {
 
             item.classList.add("active");
 
         }
+
 
         item.innerHTML = `
 
@@ -759,13 +773,26 @@ function renderHistory() {
 
         `;
 
+
         item.onclick = () => {
 
             loadChat(chat);
 
             renderHistory();
 
+            // Close mobile sidebar after selecting a chat
+
+            if (
+                window.innerWidth <= 768 &&
+                sidebar
+            ) {
+
+                sidebar.classList.remove("open");
+
+            }
+
         };
+
 
         history.appendChild(item);
 
@@ -791,6 +818,34 @@ function newChat() {
 
     messageInput.focus();
 
+
+    // Close mobile sidebar
+
+    if (
+        window.innerWidth <= 768 &&
+        sidebar
+    ) {
+
+        sidebar.classList.remove("open");
+
+    }
+
+}
+
+
+
+// ================= NEW CHAT BUTTON =================
+
+if (newChatBtn) {
+
+    newChatBtn.addEventListener(
+
+        "click",
+
+        newChat
+
+    );
+
 }
 
 
@@ -798,8 +853,8 @@ function newChat() {
 // ================= CLEAR HISTORY =================
 
 const clearHistoryBtn =
+    document.getElementById("clearHistoryBtn");
 
-document.getElementById("clearHistoryBtn");
 
 if (clearHistoryBtn) {
 
@@ -810,27 +865,28 @@ if (clearHistoryBtn) {
         () => {
 
             if (
-
                 !confirm(
-
                     "Delete all chats?"
-
                 )
-
             ) return;
+
 
             chats = [];
 
             currentChat = [];
 
             currentChat.id = null;
-if (userId) {
 
-    localStorage.removeItem(
-        `bzuChats_${userId}`
-    );
 
-}
+            if (userId) {
+
+                localStorage.removeItem(
+                    `bzuChats_${userId}`
+                );
+
+            }
+
+
             renderHistory();
 
             newChat();
@@ -849,27 +905,32 @@ function toggleTheme() {
 
     document.body.classList.toggle("dark");
 
+
     localStorage.setItem(
 
         "theme",
 
         document.body.classList.contains("dark")
-
             ? "dark"
-
             : "light"
 
     );
 
 }
 
-themeBtn.addEventListener(
 
-    "click",
+if (themeBtn) {
 
-    toggleTheme
+    themeBtn.addEventListener(
 
-);
+        "click",
+
+        toggleTheme
+
+    );
+
+}
+
 
 if (themeToggleBtn) {
 
@@ -887,45 +948,77 @@ if (themeToggleBtn) {
 
 // ================= SETTINGS =================
 
-settingsBtn.addEventListener(
+if (settingsBtn) {
 
-    "click",
+    settingsBtn.addEventListener(
 
-    () => {
+        "click",
 
-        settingsModal.classList.remove(
+        () => {
 
-            "hidden"
+            settingsModal.classList.remove(
+                "hidden"
+            );
 
-        );
 
-    }
+            // Close mobile sidebar
 
-);
+            if (
+                window.innerWidth <= 768 &&
+                sidebar
+            ) {
+
+                sidebar.classList.remove(
+                    "open"
+                );
+
+            }
+
+        }
+
+    );
+
+}
 
 
 
 // ================= ABOUT =================
 
-aboutBtn.addEventListener(
+if (aboutBtn) {
 
-    "click",
+    aboutBtn.addEventListener(
 
-    () => {
+        "click",
 
-        aboutModal.classList.remove(
+        () => {
 
-            "hidden"
-
-        );
-
-    }
-
-);
+            aboutModal.classList.remove(
+                "hidden"
+            );
 
 
+            // Close mobile sidebar
 
-// ================= CLOSE BUTTONS =================
+            if (
+                window.innerWidth <= 768 &&
+                sidebar
+            ) {
+
+                sidebar.classList.remove(
+                    "open"
+                );
+
+            }
+
+        }
+
+    );
+
+}
+
+
+
+// ================= CLOSE MODALS =================
 
 document.querySelectorAll(
 
@@ -939,17 +1032,22 @@ document.querySelectorAll(
 
         () => {
 
-            settingsModal.classList.add(
+            if (settingsModal) {
 
-                "hidden"
+                settingsModal.classList.add(
+                    "hidden"
+                );
 
-            );
+            }
 
-            aboutModal.classList.add(
 
-                "hidden"
+            if (aboutModal) {
 
-            );
+                aboutModal.classList.add(
+                    "hidden"
+                );
+
+            }
 
         }
 
@@ -959,7 +1057,7 @@ document.querySelectorAll(
 
 
 
-// ================= CLICK OUTSIDE =================
+// ================= CLICK OUTSIDE MODALS =================
 
 window.addEventListener(
 
@@ -968,29 +1066,24 @@ window.addEventListener(
     (e) => {
 
         if (
-
+            settingsModal &&
             e.target === settingsModal
-
         ) {
 
             settingsModal.classList.add(
-
                 "hidden"
-
             );
 
         }
 
+
         if (
-
+            aboutModal &&
             e.target === aboutModal
-
         ) {
 
             aboutModal.classList.add(
-
                 "hidden"
-
             );
 
         }
@@ -1001,6 +1094,95 @@ window.addEventListener(
 
 
 
+// =====================================================
+// MOBILE SIDEBAR
+// =====================================================
+
+
+// ================= OPEN / CLOSE SIDEBAR =================
+
+if (mobileMenuBtn && sidebar) {
+
+    mobileMenuBtn.addEventListener(
+
+        "click",
+
+        (event) => {
+
+            event.stopPropagation();
+
+            sidebar.classList.toggle("open");
+
+        }
+
+    );
+
+}
+
+
+
+// ================= CLOSE SIDEBAR OUTSIDE =================
+
+document.addEventListener(
+
+    "click",
+
+    (event) => {
+
+        if (
+            window.innerWidth > 768 ||
+            !sidebar ||
+            !mobileMenuBtn
+        ) {
+
+            return;
+
+        }
+
+
+        const clickedInsideSidebar =
+            sidebar.contains(event.target);
+
+
+        const clickedMenuButton =
+            mobileMenuBtn.contains(event.target);
+
+
+        if (
+            !clickedInsideSidebar &&
+            !clickedMenuButton
+        ) {
+
+            sidebar.classList.remove("open");
+
+        }
+
+    }
+
+);
+
+
+
+// ================= CLOSE SIDEBAR ON RESIZE =================
+
+window.addEventListener(
+
+    "resize",
+
+    () => {
+
+        if (
+            window.innerWidth > 768 &&
+            sidebar
+        ) {
+
+            sidebar.classList.remove("open");
+
+        }
+
+    }
+
+);
 // ================= RESTORE LAST CHAT =================
 
 window.addEventListener(

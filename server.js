@@ -44,25 +44,17 @@ if (!fs.existsSync(uploadsDirectory)) {
 if (!fs.existsSync(dataDirectory)) {
     fs.mkdirSync(dataDirectory, { recursive: true });
 }
-
 // ======================================================
 // MIDDLEWARE
 // ======================================================
 
-app.use(cors());
 app.use(
-    session({
-        secret: process.env.SESSION_SECRET || "bzu-ai-development-secret",
-        resave: false,
-        saveUninitialized: false,
-        cookie: {
-            httpOnly: true,
-            secure: false,
-            maxAge: 1000 * 60 * 60 * 24 * 7
-        }
+    cors({
+        origin: true,
+        credentials: true
     })
 );
-app.use("/api/auth", authRoutes);
+
 app.use(
     express.json({
         limit: "20mb"
@@ -76,12 +68,35 @@ app.use(
     })
 );
 
+// ======================================================
+// SESSION
+// ======================================================
+
+app.use(
+    session({
+        secret:
+            process.env.SESSION_SECRET ||
+            "bzu-ai-development-secret",
+
+        resave: false,
+
+        saveUninitialized: false,
+
+        cookie: {
+            httpOnly: true,
+            secure: false,
+            sameSite: "lax",
+            maxAge: 1000 * 60 * 60 * 24 * 7
+        }
+    })
+);
+app.use("/api/auth", authRoutes);
+
 app.use(
     express.static(
         path.join(__dirname, "public")
     )
 );
-
 // ======================================================
 // FILE UPLOAD
 // ======================================================
@@ -312,41 +327,74 @@ Email: ${memory?.email || ""}
 
 Phone: ${memory?.phone || ""}
 `;
+// ==================================================
+// LOAD PREVIOUS CHAT HISTORY FROM PRISMA
+// ==================================================
 
-        // ==================================================
-        // LOAD MEMORY ONLY WHEN NEEDED
-        // ==================================================
+let previousMessages = [];
 
-        let previousMessages = [];
+if (userId && userId !== "default") {
 
-        if (useMemory) {
+    try {
 
-            try {
+        const latestConversation =
+            await prisma.conversation.findFirst({
+                where: {
+                    userId: userId
+                },
+                orderBy: {
+                    updatedAt: "desc"
+                },
+                include: {
+                    messages: {
+                        orderBy: {
+                            createdAt: "asc"
+                        },
+                        take: 20
+                    }
+                }
+            });
 
-                previousMessages =
-                    memoryService.loadMemory(userId) || [];
+        if (latestConversation) {
 
-                console.log(
-                    "PERSONAL MEMORY LOADED"
+            previousMessages =
+                latestConversation.messages.map(
+                    message => ({
+                        role: message.role,
+                        content: message.content
+                    })
                 );
 
-            } catch (memoryError) {
-
-                console.error(
-                    "MEMORY LOAD ERROR:",
-                    memoryError
-                );
-
-                previousMessages = [];
-            }
+            console.log(
+                "PRISMA CHAT MEMORY LOADED:",
+                previousMessages.length,
+                "messages"
+            );
 
         } else {
 
             console.log(
-                "MEMORY DISABLED FOR THIS QUESTION"
+                "NO PREVIOUS CHAT HISTORY FOUND"
             );
+
         }
 
+    } catch (memoryError) {
+
+        console.error(
+            "PRISMA MEMORY LOAD ERROR:",
+            memoryError
+        );
+
+        previousMessages = [];
+    }
+
+} else {
+
+    console.log(
+        "NO AUTHENTICATED USER - MEMORY SKIPPED"
+    );
+}
         // ==================================================
         // MODE
         // ==================================================
@@ -914,67 +962,91 @@ Use headings, bullets, tables, or examples when useful.
         // ==================================================        // ==================================================
         // PART 4/5 - MEMORY + DOCUMENT UPLOAD
         // ==================================================
+// ==================================================
+// SAVE CHAT HISTORY TO PRISMA
+// ==================================================
 
-        // ==================================================
-        // SAVE PERSONAL MEMORY ONLY
-        // ==================================================
+if (userId && userId !== "default") {
 
-        if (useMemory) {
+    try {
 
-            try {
+        // Find the user's latest conversation
+        let conversation =
+            await prisma.conversation.findFirst({
+                where: {
+                    userId: userId
+                },
+                orderBy: {
+                    updatedAt: "desc"
+                }
+            });
 
-                const currentConversation =
-                    messages
-                        .filter(
-                            (msg) =>
-                                msg.role !== "system"
-                        )
-                        .map((msg) => ({
-                            role:
-                                msg.role || "user",
+        // Create a conversation if this is the user's first chat
+        if (!conversation) {
 
-                            content:
-                                msg.text ||
-                                msg.content ||
-                                ""
-                        }));
-
-                const updatedConversation = [
-
-                    ...previousMessages.slice(-10),
-
-                    ...currentConversation,
-
-                    {
-                        role: "assistant",
-                        content: reply
+            conversation =
+                await prisma.conversation.create({
+                    data: {
+                        userId: userId,
+                        title:
+                            String(latestMessage)
+                                .slice(0, 60) ||
+                            "New Chat"
                     }
-                ];
-
-                memoryService.saveMemory(
-                    userId,
-                    updatedConversation
-                );
-
-                console.log(
-                    "PERSONAL MEMORY SAVED"
-                );
-
-            } catch (memoryError) {
-
-                console.error(
-                    "MEMORY SAVE ERROR:",
-                    memoryError
-                );
-            }
-
-        } else {
+                });
 
             console.log(
-                "MEMORY NOT SAVED"
+                "NEW PRISMA CONVERSATION CREATED:",
+                conversation.id
             );
         }
 
+        // Save user's message
+        await prisma.message.create({
+            data: {
+                conversationId: conversation.id,
+                role: "user",
+                content: String(latestMessage)
+            }
+        });
+
+        // Save AI response
+        await prisma.message.create({
+            data: {
+                conversationId: conversation.id,
+                role: "assistant",
+                content: String(reply)
+            }
+        });
+
+        // Update conversation timestamp
+        await prisma.conversation.update({
+            where: {
+                id: conversation.id
+            },
+            data: {
+                updatedAt: new Date()
+            }
+        });
+
+        console.log(
+            "CHAT HISTORY SAVED TO PRISMA"
+        );
+
+    } catch (memoryError) {
+
+        console.error(
+            "PRISMA CHAT SAVE ERROR:",
+            memoryError
+        );
+    }
+
+} else {
+
+    console.log(
+        "NO AUTHENTICATED USER - CHAT NOT SAVED"
+    );
+}
         // ==================================================
         // RESPONSE
         // ==================================================
