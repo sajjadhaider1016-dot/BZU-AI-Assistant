@@ -1,26 +1,29 @@
 generator client {
   provider = "prisma-client-js"
 }
+
 datasource db {
   provider = "sqlite"
 }
 
 model User {
-  id           String       @id @default(cuid())
+  id           String   @id @default(cuid())
   name         String
-  email        String       @unique
+  email        String   @unique
   passwordHash String
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   conversations Conversation[]
+  memories      Memory[]
 }
 
 model Conversation {
-  id        String    @id @default(cuid())
-  title     String    @default("New Chat")
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id        String   @id @default(cuid())
+  title     String   @default("New Chat")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   userId String
   user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -29,11 +32,20 @@ model Conversation {
 }
 
 model Message {
-  id             String       @id @default(cuid())
-  role           String
-  content        String
-  createdAt      DateTime     @default(now())
+  id        String   @id @default(cuid())
+  role      String
+  content   String
+  createdAt DateTime @default(now())
 
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+model Memory {
+  id        String   @id @default(cuid())
+  content   String
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

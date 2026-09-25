@@ -11,6 +11,35 @@ const cors = require("cors");
 const session = require("express-session");
 const bcrypt = require("bcryptjs");
 const prisma = require("./lib/prisma");
+async function saveUserMemory(userId, content) {
+    try {
+        await prisma.memory.create({
+            data: {
+                userId,
+                content
+            }
+        });
+    } catch (error) {
+        console.error("SAVE MEMORY ERROR:", error);
+    }
+}
+
+async function getUserMemories(userId) {
+    try {
+        return await prisma.memory.findMany({
+            where: {
+                userId
+            },
+            orderBy: {
+                createdAt: "desc"
+            },
+            take: 20
+        });
+    } catch (error) {
+        console.error("LOAD MEMORY ERROR:", error);
+        return [];
+    }
+}
 const OpenAI = require("openai");
 const multer = require("multer");
 const pdfParse = require("pdf-parse");
@@ -115,7 +144,6 @@ const upload = multer({
 
 const client = new OpenAI({
     apiKey: process.env.GROQ_API_KEY,
-
     baseURL: "https://api.groq.com/openai/v1"
 });
 
@@ -246,68 +274,128 @@ app.post("/chat", async (req, res) => {
                 reply: "No messages received."
             });
         }
+// ==================================================
+// CURRENT USER MESSAGE ONLY
+// ==================================================
 
-        // ==================================================
-        // CURRENT USER MESSAGE ONLY
-        // ==================================================
+const latestMessage =
+    messages[messages.length - 1]?.text ||
+    messages[messages.length - 1]?.content ||
+    "";
+const query = cleanQuery(latestMessage);
+if (!String(latestMessage).trim()) {
+    return res.status(400).json({
+        success: false,
+        reply: "Please enter a message."
+    });
+}
+// ==================================================
+// AUTO SAVE USER MEMORY
+// ==================================================
 
-        const latestMessage =
-            messages[messages.length - 1]?.text ||
-            messages[messages.length - 1]?.content ||
-            "";
+if (
+    userId &&
+    userId !== "default"
+) {
 
-        if (!String(latestMessage).trim()) {
-            return res.status(400).json({
-                success: false,
-                reply: "Please enter a message."
-            });
-        }
+    const lowerMessage =
+        String(latestMessage).toLowerCase();
 
-        // ==================================================
-        // CLEAN QUERY
-        // ==================================================
+    const shouldSaveMemory =
 
-        const query = cleanQuery(latestMessage);
+        lowerMessage.includes("my name is") ||
 
-        console.log("QUESTION:", latestMessage);
-        console.log("CLEAN QUERY:", query);
+        lowerMessage.includes("i am") ||
 
-        // ==================================================
-        // MEMORY QUESTION DETECTION
-        // ==================================================
+        lowerMessage.includes("i study") ||
 
-        const isMemoryQuestion =
-            query.includes("who am i") ||
-            query.includes("my name") ||
-            query.includes("about me") ||
-            query.includes("what do you know about me") ||
-            query.includes("show my memory") ||
-            query.includes("my university") ||
-            query.includes("my semester") ||
-            query.includes("my department") ||
-            query.includes("my city") ||
-            query.includes("my email") ||
-            query.includes("my phone");
+        lowerMessage.includes("my university") ||
 
-        // ==================================================
-        // BZU QUESTION DETECTION
-        // ==================================================
+        lowerMessage.includes("my semester") ||
 
-        const isBZUQuery =
-            isBZUQuestion(latestMessage);
+        lowerMessage.includes("my department") ||
 
-        // ==================================================
-        // MEMORY DECISION
-        // ==================================================
+        lowerMessage.includes("my city") ||
 
-        const useMemory =
-            isMemoryQuestion &&
-            !isBZUQuery;
+        lowerMessage.includes("my email") ||
 
-        console.log("IS BZU QUERY:", isBZUQuery);
-        console.log("IS MEMORY QUERY:", isMemoryQuestion);
-        console.log("USE MEMORY:", useMemory);
+        lowerMessage.includes("my phone") ||
 
+        lowerMessage.includes("my favorite") ||
+
+        lowerMessage.includes("i like") ||
+
+        lowerMessage.includes("i love") ||
+
+        lowerMessage.includes("i prefer") ||
+
+        lowerMessage.includes("i use") ||
+
+        lowerMessage.includes("i built") ||
+
+        lowerMessage.includes("i created") ||
+
+        lowerMessage.includes("my laptop") ||
+
+        lowerMessage.includes("my github") ||
+
+        lowerMessage.includes("remember");
+
+    if (shouldSaveMemory) {
+
+        await saveUserMemory(
+            userId,
+            latestMessage
+        );
+
+        console.log(
+            "USER MEMORY SAVED:",
+            latestMessage
+        );
+    }
+}// ==================================================
+// MEMORY QUESTION DETECTION
+// ==================================================
+
+const isMemoryQuestion =
+    query.includes("who am i") ||
+    query.includes("what do you know about me") ||
+    query.includes("about me") ||
+    query.includes("show my memory") ||
+    query.includes("show memories") ||
+    query.includes("tell me about myself") ||
+    query.includes("my name") ||
+    query.includes("my university") ||
+    query.includes("my semester") ||
+    query.includes("my department") ||
+    query.includes("my city") ||
+    query.includes("my email") ||
+    query.includes("my phone") ||
+    query.includes("my favorite") ||
+    query.includes("favorite programming language") ||
+    query.includes("what is my") ||
+    query.includes("what are my") ||
+    query.includes("what do i like") ||
+    query.includes("what do i love") ||
+    query.includes("what do i prefer") ||
+    query.includes("what am i learning") ||
+    query.includes("what do you remember about me");
+    // ==================================================
+// BZU QUESTION DETECTION
+// ==================================================
+
+const isBZUQuery =
+    isBZUQuestion(latestMessage);
+// ==================================================
+// MEMORY DECISION
+// ==================================================
+
+const useMemory =
+    !isBZUQuery || isMemoryQuestion;
+
+console.log("IS BZU QUERY:", isBZUQuery);
+console.log("IS MEMORY QUERY:", isMemoryQuestion);
+console.log("USE MEMORY:", useMemory);
         // ==================================================
         // MEMORY PROMPT
         // ==================================================
@@ -332,6 +420,7 @@ Phone: ${memory?.phone || ""}
 // ==================================================
 
 let previousMessages = [];
+let userMemories = [];
 
 if (userId && userId !== "default") {
 
@@ -370,7 +459,13 @@ if (userId && userId !== "default") {
                 previousMessages.length,
                 "messages"
             );
+userMemories =
+    await getUserMemories(userId);
 
+console.log(
+    "USER MEMORIES LOADED:",
+    userMemories.length
+);
         } else {
 
             console.log(
@@ -537,7 +632,10 @@ if (userId && userId !== "default") {
         // ==================================================
         // SYSTEM PROMPT
         // ==================================================
-
+const memoryText =
+    userMemories
+        .map(memory => memory.content)
+        .join("\n");
         const systemPrompt = `
 You are BZU AI Assistant, an intelligent university assistant developed by Sajjad Haider.
 
@@ -808,7 +906,6 @@ If the user asks:
 Answer exactly:
 
 "I am the official BZU AI Assistant developed by Sajjad Haider."
-
 ======================================================
 PRIVATE MEMORY DATA
 ======================================================
@@ -820,6 +917,10 @@ Private user information:
 
 ${memoryPrompt}
 
+Stored Memories:
+
+${memoryText}
+
 Use this information ONLY when the current question is about the user.
 
 Do not reveal it unless directly relevant.
@@ -828,7 +929,6 @@ Do not reveal it unless directly relevant.
 Do not use user memory for this question.
 `
 }
-
 ======================================================
 RETRIEVED BZU KNOWLEDGE
 ======================================================
