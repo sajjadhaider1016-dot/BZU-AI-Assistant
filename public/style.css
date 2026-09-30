@@ -1107,6 +1107,74 @@ body{
     animation:voice-pulse 1.5s ease-in-out infinite;
 }
 
+.pending-attachment-preview {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: fit-content;
+    max-width: min(100%, 520px);
+    margin: 0 0 10px 10px;
+    padding: 9px 12px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--card);
+    color: var(--text);
+    box-shadow: 0 4px 14px rgba(20, 40, 75, .08);
+}
+
+.pending-attachment-preview[hidden] {
+    display: none;
+}
+
+.pending-attachment-details {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.pending-attachment-name {
+    overflow: hidden;
+    max-width: 420px;
+    color: inherit;
+    font-size: 13px;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pending-attachment-hint {
+    color: #71809a;
+    font-size: 11px;
+}
+
+.pending-attachment-remove {
+    display: grid;
+    width: 30px;
+    height: 30px;
+    flex: 0 0 30px;
+    place-items: center;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: #71809a;
+    cursor: pointer;
+}
+
+.pending-attachment-remove:hover {
+    background: rgba(100, 120, 150, .12);
+    color: #263248;
+}
+
+body.dark .pending-attachment-hint,
+body.dark .pending-attachment-remove {
+    color: #a9b8c9;
+}
+
+body.dark .pending-attachment-remove:hover {
+    color: #ffffff;
+}
+
 .logo-icon img,
 .auth-logo-icon img {
     display: block;

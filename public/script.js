@@ -28,6 +28,10 @@ const imageLibraryGrid = document.getElementById("imageLibraryGrid");
 
 const fileInput = document.getElementById("fileInput");
 
+const pendingAttachmentPreview = document.getElementById("pendingAttachmentPreview");
+
+let pendingUploadFile = null;
+
 const voiceBtn = document.getElementById("voiceBtn");
 
 const history = document.getElementById("history");
@@ -674,6 +678,10 @@ function saveCurrentChat() {
 
 function loadChat(chat) {
 
+    pendingUploadFile = null;
+    fileInput.value = "";
+    renderPendingAttachment();
+
     clearMessages();
 
     currentChat = [...chat.messages];
@@ -709,19 +717,66 @@ function loadChat(chat) {
 
 // ================= SEND MESSAGE =================
 
+function renderPendingAttachment() {
+    if (!pendingAttachmentPreview) return;
+    pendingAttachmentPreview.replaceChildren();
+    pendingAttachmentPreview.hidden = !pendingUploadFile;
+    messageInput.placeholder = pendingUploadFile
+        ? "Tell me what to do with this file..."
+        : "Ask anything about BZU...";
+    if (!pendingUploadFile) return;
+
+    const icon = document.createElement("i");
+    icon.className = pendingUploadFile.type.startsWith("image/")
+        ? "fa-regular fa-image"
+        : "fa-solid fa-paperclip";
+    icon.setAttribute("aria-hidden", "true");
+
+    const details = document.createElement("div");
+    details.className = "pending-attachment-details";
+    const name = document.createElement("span");
+    name.className = "pending-attachment-name";
+    name.textContent = pendingUploadFile.name;
+    const hint = document.createElement("span");
+    hint.className = "pending-attachment-hint";
+    hint.textContent = "Add an instruction, then press Send";
+    details.append(name, hint);
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "pending-attachment-remove";
+    remove.title = "Remove attachment";
+    remove.setAttribute("aria-label", "Remove attachment");
+    remove.innerHTML = '<i class="fa-solid fa-xmark" aria-hidden="true"></i>';
+    remove.addEventListener("click", () => {
+        pendingUploadFile = null;
+        fileInput.value = "";
+        renderPendingAttachment();
+    });
+
+    pendingAttachmentPreview.append(icon, details, remove);
+}
+
+function isUploadEditInstruction(text) {
+    return /\b(edit|modify|change|replace|remove|add|retouch|crop|enhance|clean up|rewrite|correct|fix|update|reformat|translate|proofread|redesign|improve|polish)\b/i.test(text) ||
+        /\b(make|turn|set)\s+(?:it|this|the|my|the background|background|image|photo|picture|file|document|spreadsheet|page)\b/i.test(text);
+}
+
 async function sendMessage() {
 
     const text = messageInput.value.trim();
 
-    if (!text || isTyping) return;
+    const fileToUpload = pendingUploadFile;
+
+    if ((!text && !fileToUpload) || isTyping) return;
 
     const fileRequest = requestedFileRequest(text);
     const previousAssistantReply = [...currentChat].reverse()
         .find(message => message.role === "assistant")?.text || "";
-    const latestUploadedFile = [...currentChat].reverse()
+    let latestUploadedFile = [...currentChat].reverse()
         .find(message => message.role === "user" && message.attachmentId);
 
-    const voiceChangeReply = handleVoiceChangeRequest(text);
+    const voiceChangeReply = fileToUpload ? "" : handleVoiceChangeRequest(text);
     if (voiceChangeReply) {
         welcomeScreen.style.display = "none";
         chatContainer.style.display = "flex";
@@ -740,19 +795,21 @@ async function sendMessage() {
     welcomeScreen.style.display = "none";
     chatContainer.style.display = "flex";
 
-    currentChat.push({
+    if (!fileToUpload) {
+        currentChat.push({
 
-        role: "user",
+            role: "user",
 
-        text
+            text
 
-    });
-rememberUser(text);
-    addUserMessage(text);
+        });
+        rememberUser(text);
+        addUserMessage(text);
 
-    messageInput.value = "";
+        messageInput.value = "";
 
-    messageInput.style.height = "auto";
+        messageInput.style.height = "auto";
+    }
 
     isTyping = true;
 
@@ -760,9 +817,92 @@ rememberUser(text);
 
     try {
 
-        const asksToEditUpload = latestUploadedFile &&
-            /\b(edit|modify|change|replace|remove|add|retouch|crop|enhance|clean up|rewrite|correct|fix|update|reformat|translate|proofread|redesign)\b/i.test(text) ||
-            (latestUploadedFile && /\b(make|turn|set)\s+(?:it|this|the|my|the background|background|image|photo|picture|file|document|spreadsheet|page)\b/i.test(text));
+        let uploadResult = null;
+        if (fileToUpload) {
+            const formData = new FormData();
+            formData.append("file", fileToUpload);
+            formData.append("instruction", text);
+            if (text && (isUploadEditInstruction(text) || fileRequest)) formData.append("skipAnalysis", "true");
+
+            const uploadResponse = await fetch("/upload", { method: "POST", body: formData });
+            const uploadBody = await uploadResponse.text();
+            try { uploadResult = JSON.parse(uploadBody); }
+            catch { throw new Error(uploadBody || "The file could not be uploaded."); }
+            if (!uploadResponse.ok || !uploadResult.success) {
+                throw new Error(uploadResult.reply || uploadResult.message || "The file could not be uploaded.");
+            }
+
+            const attachment = uploadResult.attachment || {};
+            latestUploadedFile = {
+                role: "user",
+                text: text || `Uploaded: ${attachment.name || fileToUpload.name}`,
+                attachmentId: attachment.id || "",
+                attachmentName: attachment.name || fileToUpload.name,
+                attachmentFormat: attachment.format || "",
+                attachmentIsImage: Boolean(attachment.isImage),
+                attachmentUrl: attachment.previewUrl || ""
+            };
+            currentChat.push(latestUploadedFile);
+            if (text) rememberUser(text);
+            addUserMessage(latestUploadedFile.text, latestUploadedFile);
+            pendingUploadFile = null;
+            renderPendingAttachment();
+            messageInput.value = "";
+            messageInput.style.height = "auto";
+        }
+
+        const lastAttachedMedia = [...currentChat].reverse().find(message =>
+            (message.role === "user" && message.attachmentId) ||
+            (message.role === "assistant" && message.imageUrl && message.status !== "failed")
+        );
+        const shouldConvertUpload = Boolean(fileRequest &&
+            (fileToUpload || (fileRequest.usePrevious && lastAttachedMedia)));
+
+        if (shouldConvertUpload) {
+            const fileDownloads = [];
+            for (const format of fileRequest.formats) {
+                const isGeneratedImage = !fileToUpload && lastAttachedMedia?.role === "assistant";
+                const generatedImageFilename = isGeneratedImage
+                    ? decodeURIComponent(String(lastAttachedMedia.imageUrl).split("/").pop())
+                    : "";
+                const convertResponse = await fetch("/api/convert-upload", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(isGeneratedImage
+                        ? { generatedImageFilename, format }
+                        : { attachmentId: latestUploadedFile?.attachmentId, format })
+                });
+                const convertData = await convertResponse.json().catch(() => ({}));
+                if (!convertResponse.ok) throw new Error(convertData.message || "Could not convert the uploaded file.");
+                fileDownloads.push({
+                    filename: convertData.filename,
+                    format: convertData.format,
+                    downloadUrl: convertData.downloadUrl
+                });
+            }
+            hideTyping();
+            const assistantMessage = {
+                role: "assistant",
+                text: fileDownloads.length > 1 ? "Files created as requested." : "File created as requested.",
+                fileDownloads
+            };
+            currentChat.push(assistantMessage);
+            addAIMessage(assistantMessage.text, assistantMessage);
+            saveCurrentChat();
+            return;
+        }
+
+        const asksToEditUpload = Boolean(latestUploadedFile && text && isUploadEditInstruction(text));
+
+        if (fileToUpload && !asksToEditUpload) {
+            hideTyping();
+            const uploadReply = uploadResult?.reply || "File uploaded. Tell me what you would like me to do with it.";
+            const assistantMessage = { role: "assistant", text: uploadReply };
+            currentChat.push(assistantMessage);
+            addAIMessage(uploadReply);
+            saveCurrentChat();
+            return;
+        }
 
         if (asksToEditUpload) {
             const editResponse = await fetch("/api/edit-upload", {
@@ -1097,6 +1237,10 @@ function renderHistory() {
 // ================= NEW CHAT =================
 
 function newChat() {
+
+    pendingUploadFile = null;
+    fileInput.value = "";
+    renderPendingAttachment();
 
     currentChat = [];
 
@@ -1536,76 +1680,11 @@ uploadBtn.addEventListener("click",(e)=>{
 
 // ================= FILE UPLOAD =================
 
-fileInput.addEventListener("change",async()=>{
-
-    if(!fileInput.files.length)return;
-
-    const file=fileInput.files[0];
-
-    showTyping();
-
-    const formData=new FormData();
-
-    formData.append("file",file);
-
-    try{
-
-        const response=await fetch("/upload",{
-
-            method:"POST",
-
-            body:formData
-
-        });
-
-        const text=await response.text();
-
-        if(!response.ok){
-
-            throw new Error(text);
-
-        }
-
-        const data=JSON.parse(text);
-
-        hideTyping();
-
-        const attachment = data.attachment || {};
-        const uploadMessage = {
-            role: "user",
-            text: `📄 Uploaded: ${file.name}`,
-            attachmentId: attachment.id || "",
-            attachmentName: attachment.name || file.name,
-            attachmentFormat: attachment.format || "",
-            attachmentIsImage: Boolean(attachment.isImage),
-            attachmentUrl: attachment.previewUrl || ""
-        };
-        currentChat.push(uploadMessage);
-        addUserMessage(uploadMessage.text, uploadMessage);
-
-        const uploadReply = data.reply || data.message || "File uploaded successfully. You can now ask me to edit the attached file.";
-        const assistantMessage = { role: "assistant", text: uploadReply };
-        currentChat.push(assistantMessage);
-        addAIMessage(uploadReply);
-
-        saveCurrentChat();
-
-    }
-
-    catch(err){
-
-        hideTyping();
-
-        console.error(err);
-
-        addAIMessage(
-
-            "❌ Upload failed.\n\n"+err.message
-
-        );
-
-    }
-
+fileInput.addEventListener("change", () => {
+    if (!fileInput.files?.length) return;
+    pendingUploadFile = fileInput.files[0];
+    renderPendingAttachment();
+    messageInput.focus();
 });
 
 
@@ -1654,17 +1733,17 @@ function populateSpeechVoices() {
 
 function requestedFileRequest(request) {
     const raw = String(request || "");
-    const hasCreateAction = /\b(create|make|generate|export|download|save|convert|turn|put|prepare|write|send)\b/i.test(raw)
+    const hasCreateAction = /\b(create|make|generate|export|download|save|convert|turn|put|prepare|write|send|give|get|provide)\b/i.test(raw)
         || /\b(?:want|need)\s+(?:a|an|the|this|that|my|your)?\s*(?:file|document|pdf|word|docx|xlsx|pptx|csv|json|txt)\b/i.test(raw);
     const formatRules = [
-        [/\b(pdf)\b/i, "pdf"],
-        [/\b(docx|word document|word file|microsoft word|word)\b/i, "docx"],
-        [/\b(xlsx|excel|spreadsheet)\b/i, "xlsx"],
-        [/\b(pptx|powerpoint|presentation|slide deck)\b/i, "pptx"],
-        [/\b(csv|\.csv)\b/i, "csv"],
-        [/\b(json|\.json)\b/i, "json"],
-        [/\b(html|web page|website file)\b/i, "html"],
-        [/\b(markdown|\.md)\b/i, "md"],
+        [/\b(pdf file|pdf document|pdf report|pdf version|as (?:a )?pdf|into (?:a )?pdf|to (?:a )?pdf|(?:its|it|this|that) pdf|(?:create|make|generate|give|get|provide)\s+(?:me\s+)?(?:a\s+)?pdf|\.pdf)\b/i, "pdf"],
+        [/\b(docx|word document|word file|word doc|microsoft word|as (?:a )?word|into (?:a )?word|to word|in word|\.docx)\b/i, "docx"],
+        [/\b(xlsx|excel file|excel spreadsheet|spreadsheet file|as excel|into excel|to excel|\.xlsx)\b/i, "xlsx"],
+        [/\b(pptx|powerpoint file|powerpoint presentation|presentation file|slide deck|as powerpoint|to powerpoint|\.pptx)\b/i, "pptx"],
+        [/\b(csv file|as csv|to csv|\.csv)\b/i, "csv"],
+        [/\b(json file|as json|to json|\.json)\b/i, "json"],
+        [/\b(html file|html document|html page|web page|website file|as html|in html|\.html)\b/i, "html"],
+        [/\b(markdown file|as markdown|to markdown|\.md)\b/i, "md"],
         [/\b(text file|txt file|\.txt)\b/i, "txt"],
         [/\b(javascript file|js file|\.js)\b/i, "js"],
         [/\b(typescript file|ts file|\.ts)\b/i, "ts"],
@@ -1710,7 +1789,8 @@ function requestedFileRequest(request) {
     if (!formats.length) formats.push(/\b(document|report)\b/i.test(raw) ? "docx" : "txt");
     return {
         formats,
-        usePrevious: /\b(that|this|it|above|previous|last answer|last reply)\b/i.test(raw)
+        usePrevious: /\b(that|this|it|its|above|previous|last answer|last reply|uploaded|attached)\b/i.test(raw)
+            || /\b(?:the|my|that|this|uploaded|attached)\s+(?:file|image|photo|picture|document|spreadsheet)\b/i.test(raw)
     };
 }
 
