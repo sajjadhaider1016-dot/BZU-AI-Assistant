@@ -18,6 +18,14 @@ const sendBtn = document.getElementById("sendBtn");
 
 const uploadBtn = document.getElementById("uploadBtn");
 
+const imageGenerateBtn = document.getElementById("imageGenerateBtn");
+
+const imageLibraryBtn = document.getElementById("imageLibraryBtn");
+
+const imageLibraryModal = document.getElementById("imageLibraryModal");
+
+const imageLibraryGrid = document.getElementById("imageLibraryGrid");
+
 const fileInput = document.getElementById("fileInput");
 
 const voiceBtn = document.getElementById("voiceBtn");
@@ -282,7 +290,7 @@ function hideTyping() {
 
 // ================= CREATE MESSAGE =================
 
-function createMessage(type, text) {
+function createMessage(type, text, extra = {}) {
 
     const message = document.createElement("div");
 
@@ -294,7 +302,7 @@ function createMessage(type, text) {
 
             ? "👤"
 
-            : "🧠";
+            : '<img src="/images/bzu-logo.png" alt="BZU AI">';
 
     let content = text;
 
@@ -356,6 +364,57 @@ function createMessage(type, text) {
 
     `;
 
+    if (type === "user" && extra.attachmentName) {
+        const bubble = message.querySelector(".bubble");
+        const attachment = document.createElement("div");
+        attachment.className = "uploaded-file-preview";
+        if (extra.attachmentIsImage && extra.attachmentUrl) {
+            const image = document.createElement("img");
+            image.src = extra.attachmentUrl;
+            image.alt = extra.attachmentName;
+            image.className = "uploaded-file-image";
+            image.loading = "lazy";
+            attachment.appendChild(image);
+        }
+        const label = document.createElement("span");
+        label.innerHTML = '<i class="fa-solid fa-paperclip" aria-hidden="true"></i>';
+        label.append(document.createTextNode(` ${extra.attachmentName}`));
+        attachment.appendChild(label);
+        bubble.appendChild(attachment);
+    }
+
+    if (type === "ai" && extra.imageUrl) {
+        const bubble = message.querySelector(".bubble");
+        const image = document.createElement("img");
+        image.src = extra.imageUrl;
+        image.alt = extra.prompt || "Generated image";
+        image.className = "generated-chat-image";
+        image.loading = "lazy";
+        bubble.appendChild(image);
+
+        if (!Array.isArray(extra.fileDownloads) || !extra.fileDownloads.length) {
+            const downloadLink = document.createElement("a");
+            downloadLink.href = extra.imageUrl;
+            downloadLink.download = extra.imageFilename || "bzu-ai-generated-image.png";
+            downloadLink.className = "generated-image-download";
+            downloadLink.textContent = "Download image";
+            downloadLink.setAttribute("aria-label", "Download generated image");
+            bubble.appendChild(downloadLink);
+        }
+    }
+
+    if (type === "ai" && Array.isArray(extra.fileDownloads)) {
+        const bubble = message.querySelector(".bubble");
+        extra.fileDownloads.forEach(file => {
+            const downloadLink = document.createElement("a");
+            downloadLink.href = file.downloadUrl;
+            downloadLink.download = file.filename;
+            downloadLink.className = "document-download-link";
+            downloadLink.textContent = `Download ${String(file.format || "file").toUpperCase()}`;
+            bubble.appendChild(downloadLink);
+        });
+    }
+
     chatMessages.appendChild(message);
 
     scrollToBottom();
@@ -365,17 +424,171 @@ function createMessage(type, text) {
 
 // ================= HELPERS =================
 
-function addUserMessage(text) {
+function addUserMessage(text, extra = {}) {
 
-    createMessage("user", text);
+    createMessage("user", text, extra);
+
+}
+
+function addAIMessage(text, extra = {}) {
+
+    createMessage("ai", text, extra);
 
 }
 
-function addAIMessage(text) {
+async function generateImage() {
+    const prompt = window.prompt("Describe the image you want to create (up to 500 characters):");
+    if (!prompt || !prompt.trim()) return;
+    const cleanedPrompt = prompt.trim();
+    imageGenerateBtn.disabled = true;
+    imageGenerateBtn.title = "Generating image…";
+    welcomeScreen.style.display = "none";
+    chatContainer.style.display = "flex";
 
-    createMessage("ai", text);
+    const userText = `Create an image: ${cleanedPrompt}`;
+    currentChat.push({ role: "user", text: userText });
+    addUserMessage(userText);
 
+    const imageRecord = {
+        role: "assistant",
+        text: "Creating image…",
+        prompt: cleanedPrompt,
+        status: "generating"
+    };
+    currentChat.push(imageRecord);
+    createMessage("ai", "");
+    const bubble = chatMessages.lastElementChild.querySelector(".bubble");
+    const content = bubble.querySelector(".bubble-content");
+    const preview = document.createElement("div");
+    preview.className = "image-generation-preview";
+    const status = document.createElement("div");
+    status.className = "image-preview-status";
+    status.innerHTML = '<span class="image-preview-spinner" aria-hidden="true"></span><span>Creating your image</span>';
+    const stage = document.createElement("div");
+    stage.className = "image-preview-stage is-generating";
+    const shimmer = document.createElement("div");
+    shimmer.className = "image-preview-shimmer";
+    shimmer.setAttribute("aria-hidden", "true");
+    const promptLabel = document.createElement("p");
+    promptLabel.className = "image-preview-prompt";
+    promptLabel.textContent = cleanedPrompt;
+    const helper = document.createElement("p");
+    helper.className = "image-preview-helper";
+    helper.textContent = "This may take a little while.";
+    stage.appendChild(shimmer);
+    preview.append(status, stage, promptLabel, helper);
+    content.replaceChildren(preview);
+    scrollToBottom();
+
+    try {
+        const response = await fetch("/api/generate-image", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt: cleanedPrompt })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.message || "Image generation failed.");
+        welcomeScreen.style.display = "none";
+        chatContainer.style.display = "flex";
+        const label = "Generated image";
+        imageRecord.text = label;
+        imageRecord.imageUrl = data.imageUrl;
+        imageRecord.status = "ready";
+        status.className = "image-preview-status is-ready";
+        status.replaceChildren();
+        const readyIcon = document.createElement("i");
+        readyIcon.className = "fa-solid fa-circle-check";
+        readyIcon.setAttribute("aria-hidden", "true");
+        status.append(readyIcon, document.createTextNode(" Image ready"));
+        stage.classList.remove("is-generating");
+        stage.replaceChildren();
+        const image = document.createElement("img");
+        image.src = data.imageUrl;
+        image.alt = cleanedPrompt;
+        image.className = "generated-chat-image";
+        image.loading = "lazy";
+        stage.appendChild(image);
+        const downloadLink = document.createElement("a");
+        downloadLink.href = data.imageUrl;
+        downloadLink.download = "bzu-ai-generated-image.png";
+        downloadLink.className = "generated-image-download";
+        downloadLink.textContent = "Download image";
+        downloadLink.setAttribute("aria-label", "Download generated image");
+        preview.appendChild(downloadLink);
+        helper.remove();
+
+        saveCurrentChat();
+    } catch (error) {
+        imageRecord.text = "Image could not be created.";
+        imageRecord.status = "failed";
+        status.className = "image-preview-status is-error";
+        status.replaceChildren();
+        const errorIcon = document.createElement("i");
+        errorIcon.className = "fa-solid fa-circle-exclamation";
+        errorIcon.setAttribute("aria-hidden", "true");
+        status.append(errorIcon, document.createTextNode(" Image creation failed"));
+        stage.classList.remove("is-generating");
+        stage.classList.add("is-failed");
+        stage.replaceChildren();
+        const errorText = document.createElement("p");
+        errorText.textContent = error.message || "Please try again later.";
+        stage.appendChild(errorText);
+        helper.remove();
+        saveCurrentChat();
+    } finally {
+        imageGenerateBtn.disabled = false;
+        imageGenerateBtn.title = "Generate an image using the shared free allowance";
+    }
 }
+
+async function openImageLibrary() {
+    imageLibraryModal.classList.remove("hidden");
+    imageLibraryGrid.replaceChildren();
+    const loading = document.createElement("p");
+    loading.textContent = "Loading your images…";
+    imageLibraryGrid.appendChild(loading);
+    try {
+        const response = await fetch("/api/generated-images");
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.message || "Could not load your image library.");
+        imageLibraryGrid.replaceChildren();
+        if (!data.images?.length) {
+            const empty = document.createElement("p");
+            empty.className = "image-library-empty";
+            empty.textContent = "Images you generate will appear here.";
+            imageLibraryGrid.appendChild(empty);
+            return;
+        }
+        data.images.forEach(item => {
+            const card = document.createElement("article");
+            card.className = "image-library-card";
+            const image = document.createElement("img");
+            image.src = item.imageUrl;
+            image.alt = item.prompt || "Generated image";
+            image.loading = "lazy";
+            const caption = document.createElement("p");
+            caption.textContent = item.prompt || "Generated image";
+            const download = document.createElement("a");
+            download.href = item.imageUrl;
+            download.download = "bzu-ai-generated-image.png";
+            download.className = "generated-image-download";
+            download.textContent = "Download";
+            card.append(image, caption, download);
+            imageLibraryGrid.appendChild(card);
+        });
+    } catch (error) {
+        imageLibraryGrid.replaceChildren();
+        const message = document.createElement("p");
+        message.className = "image-library-empty";
+        message.textContent = error.message || "Could not load your image library.";
+        imageLibraryGrid.appendChild(message);
+    }
+}
+
+imageLibraryBtn?.addEventListener("click", () => {
+    openImageLibrary();
+    if (window.innerWidth <= 768 && sidebar) sidebar.classList.remove("open");
+});
 
 function clearMessages() {
 
@@ -471,13 +684,13 @@ function loadChat(chat) {
 
         if (msg.role === "user") {
 
-            addUserMessage(msg.text);
+            addUserMessage(msg.text, msg);
 
         }
 
         else {
 
-            addAIMessage(msg.text);
+            addAIMessage(msg.text, msg);
 
         }
 
@@ -502,6 +715,28 @@ async function sendMessage() {
 
     if (!text || isTyping) return;
 
+    const fileRequest = requestedFileRequest(text);
+    const previousAssistantReply = [...currentChat].reverse()
+        .find(message => message.role === "assistant")?.text || "";
+    const latestUploadedFile = [...currentChat].reverse()
+        .find(message => message.role === "user" && message.attachmentId);
+
+    const voiceChangeReply = handleVoiceChangeRequest(text);
+    if (voiceChangeReply) {
+        welcomeScreen.style.display = "none";
+        chatContainer.style.display = "flex";
+        currentChat.push({ role: "user", text });
+        rememberUser(text);
+        addUserMessage(text);
+        currentChat.push({ role: "assistant", text: voiceChangeReply });
+        addAIMessage(voiceChangeReply);
+        if (voiceMode) speakReply(voiceChangeReply);
+        saveCurrentChat();
+        messageInput.value = "";
+        messageInput.style.height = "auto";
+        return;
+    }
+
     welcomeScreen.style.display = "none";
     chatContainer.style.display = "flex";
 
@@ -525,6 +760,40 @@ rememberUser(text);
 
     try {
 
+        const asksToEditUpload = latestUploadedFile &&
+            /\b(edit|modify|change|replace|remove|add|retouch|crop|enhance|clean up|rewrite|correct|fix|update|reformat|translate|proofread|redesign)\b/i.test(text) ||
+            (latestUploadedFile && /\b(make|turn|set)\s+(?:it|this|the|my|the background|background|image|photo|picture|file|document|spreadsheet|page)\b/i.test(text));
+
+        if (asksToEditUpload) {
+            const editResponse = await fetch("/api/edit-upload", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    attachmentId: latestUploadedFile.attachmentId,
+                    instruction: text
+                })
+            });
+            const editData = await editResponse.json().catch(() => ({}));
+            if (!editResponse.ok) throw new Error(editData.message || "Could not edit the uploaded file.");
+
+            hideTyping();
+            const editedMessage = {
+                role: "assistant",
+                text: editData.message || "The edited file is ready.",
+                fileDownloads: [{
+                    filename: editData.filename,
+                    format: editData.format,
+                    downloadUrl: editData.downloadUrl
+                }],
+                ...(editData.imageUrl ? { imageUrl: editData.imageUrl } : {})
+            };
+            currentChat.push(editedMessage);
+            addAIMessage(editedMessage.text, editedMessage);
+            if (voiceMode) speakReply(editedMessage.text);
+            saveCurrentChat();
+            return;
+        }
+
         const response = await fetch("/chat", {
 
             method: "POST",
@@ -541,7 +810,11 @@ rememberUser(text);
 
     memory: memory,
 
-    userId: userId
+    userId: userId,
+
+    fileFormat: fileRequest?.formats?.[0] || "",
+
+    fileContext: fileRequest?.usePrevious ? previousAssistantReply : ""
 
 })
         });
@@ -566,15 +839,34 @@ rememberUser(text);
 
             "No response.";
 
-        currentChat.push({
+        let displayedReply = aiReply;
+        let assistantMessage;
+        if (fileRequest) {
+            try {
+                const contentForFile = fileRequest.usePrevious && previousAssistantReply
+                    ? previousAssistantReply
+                    : aiReply;
+                const fileDownloads = [];
+                for (const format of fileRequest.formats) {
+                    fileDownloads.push(await createGeneratedFile(contentForFile, format, text));
+                }
+                displayedReply = fileDownloads.length > 1
+                    ? "Files created as requested."
+                    : "File created as requested.";
+                assistantMessage = { role: "assistant", text: displayedReply, fileDownloads };
+            } catch (fileError) {
+                displayedReply = fileError.message || "I couldn't create that file. Please try again.";
+                assistantMessage = { role: "assistant", text: displayedReply };
+            }
+        } else {
+            assistantMessage = { role: "assistant", text: aiReply };
+        }
+        currentChat.push(assistantMessage);
+        addAIMessage(displayedReply, assistantMessage);
 
-            role: "assistant",
-
-            text: aiReply
-
-        });
-
-        addAIMessage(aiReply);
+        if (voiceMode) {
+            speakReply(displayedReply);
+        }
 
 
 
@@ -654,17 +946,15 @@ rememberUser(text);
 
         hideTyping();
 
-        addAIMessage(
-
-            "❌ Unable to contact AI server."
-
-        );
+        addAIMessage(`❌ ${error?.message || "Unable to contact AI server."}`);
 
     }
 
     finally {
 
         isTyping = false;
+
+        if (voiceMode) resumeVoiceListening();
 
     }
 
@@ -681,6 +971,8 @@ sendBtn.addEventListener(
     sendMessage
 
 );
+
+imageGenerateBtn?.addEventListener("click", generateImage);
 
 
 
@@ -1049,6 +1341,10 @@ document.querySelectorAll(
 
             }
 
+            if (imageLibraryModal) {
+                imageLibraryModal.classList.add("hidden");
+            }
+
         }
 
     );
@@ -1086,6 +1382,10 @@ window.addEventListener(
                 "hidden"
             );
 
+        }
+
+        if (imageLibraryModal && e.target === imageLibraryModal) {
+            imageLibraryModal.classList.add("hidden");
         }
 
     }
@@ -1242,8 +1542,6 @@ fileInput.addEventListener("change",async()=>{
 
     const file=fileInput.files[0];
 
-    addUserMessage("📄 Uploaded: "+file.name);
-
     showTyping();
 
     const formData=new FormData();
@@ -1272,35 +1570,23 @@ fileInput.addEventListener("change",async()=>{
 
         hideTyping();
 
-        currentChat.push({
+        const attachment = data.attachment || {};
+        const uploadMessage = {
+            role: "user",
+            text: `📄 Uploaded: ${file.name}`,
+            attachmentId: attachment.id || "",
+            attachmentName: attachment.name || file.name,
+            attachmentFormat: attachment.format || "",
+            attachmentIsImage: Boolean(attachment.isImage),
+            attachmentUrl: attachment.previewUrl || ""
+        };
+        currentChat.push(uploadMessage);
+        addUserMessage(uploadMessage.text, uploadMessage);
 
-            role:"user",
-
-            text:"📄 Uploaded: "+file.name
-
-        });
-
-        currentChat.push({
-
-            role:"assistant",
-
-            text:data.reply||
-
-                 data.message||
-
-                 "File uploaded successfully."
-
-        });
-
-        addAIMessage(
-
-            data.reply||
-
-            data.message||
-
-            "File uploaded successfully."
-
-        );
+        const uploadReply = data.reply || data.message || "File uploaded successfully. You can now ask me to edit the attached file.";
+        const assistantMessage = { role: "assistant", text: uploadReply };
+        currentChat.push(assistantMessage);
+        addAIMessage(uploadReply);
 
         saveCurrentChat();
 
@@ -1324,82 +1610,446 @@ fileInput.addEventListener("change",async()=>{
 
 
 
-// ================= VOICE =================
+// ================= VOICE CHAT =================
 
-if(
+let voiceMode = false;
+let recognition = null;
+let recognitionRunning = false;
+let holdPressTimer = null;
+let pointerDown = false;
+let longPressTriggered = false;
+let voiceInputFinalized = true;
+let pendingVoiceTranscript = "";
+let listenRestartTimer = null;
+let assistantSpeechText = "";
+let assistantSpeechActive = false;
 
-    "SpeechRecognition" in window ||
+const SpeechRecognition =
+    window.SpeechRecognition || window.webkitSpeechRecognition;
+const voiceSelect = document.getElementById("voiceSelect");
+const previewVoiceBtn = document.getElementById("previewVoiceBtn");
+let availableSpeechVoices = [];
 
-    "webkitSpeechRecognition" in window
+function populateSpeechVoices() {
+    if (!window.speechSynthesis || !voiceSelect) return;
 
-){
+    const savedVoiceURI = localStorage.getItem("bzuSpeechVoiceURI") || "";
+    availableSpeechVoices = window.speechSynthesis.getVoices();
 
-    const SpeechRecognition=
+    voiceSelect.innerHTML = '<option value="">System default</option>';
 
-        window.SpeechRecognition||
+    availableSpeechVoices.forEach((voice) => {
+        const option = document.createElement("option");
+        option.value = voice.voiceURI;
+        option.textContent = `${voice.name} (${voice.lang})${voice.default ? " — Default" : ""}`;
+        voiceSelect.appendChild(option);
+    });
 
-        window.webkitSpeechRecognition;
-
-    const recognition=
-
-        new SpeechRecognition();
-
-    recognition.lang="en-US";
-
-    recognition.interimResults=false;
-
-    recognition.maxAlternatives=1;
-
-    voiceBtn.addEventListener(
-
-        "click",
-
-        ()=>{
-
-            recognition.start();
-
-            voiceBtn.innerHTML=
-
-            '<i class="fa-solid fa-microphone-lines"></i>';
-
-        }
-
-    );
-
-    recognition.onresult=function(e){
-
-        messageInput.value=
-
-        e.results[0][0].transcript;
-
-        voiceBtn.innerHTML=
-
-        '<i class="fa-solid fa-microphone"></i>';
-
-    };
-
-    recognition.onerror=function(){
-
-        voiceBtn.innerHTML=
-
-        '<i class="fa-solid fa-microphone"></i>';
-
-    };
-
-    recognition.onend=function(){
-
-        voiceBtn.innerHTML=
-
-        '<i class="fa-solid fa-microphone"></i>';
-
-    };
-
+    if (availableSpeechVoices.some(voice => voice.voiceURI === savedVoiceURI)) {
+        voiceSelect.value = savedVoiceURI;
+    } else if (savedVoiceURI) {
+        localStorage.removeItem("bzuSpeechVoiceURI");
+    }
 }
 
-else{
+function requestedFileRequest(request) {
+    const raw = String(request || "");
+    const hasCreateAction = /\b(create|make|generate|export|download|save|convert|turn|put|prepare|write|send)\b/i.test(raw)
+        || /\b(?:want|need)\s+(?:a|an|the|this|that|my|your)?\s*(?:file|document|pdf|word|docx|xlsx|pptx|csv|json|txt)\b/i.test(raw);
+    const formatRules = [
+        [/\b(pdf)\b/i, "pdf"],
+        [/\b(docx|word document|word file|microsoft word|word)\b/i, "docx"],
+        [/\b(xlsx|excel|spreadsheet)\b/i, "xlsx"],
+        [/\b(pptx|powerpoint|presentation|slide deck)\b/i, "pptx"],
+        [/\b(csv|\.csv)\b/i, "csv"],
+        [/\b(json|\.json)\b/i, "json"],
+        [/\b(html|web page|website file)\b/i, "html"],
+        [/\b(markdown|\.md)\b/i, "md"],
+        [/\b(text file|txt file|\.txt)\b/i, "txt"],
+        [/\b(javascript file|js file|\.js)\b/i, "js"],
+        [/\b(typescript file|ts file|\.ts)\b/i, "ts"],
+        [/\b(css file|\.css)\b/i, "css"],
+        [/\b(python file|python script|py file|\.py)\b/i, "py"],
+        [/\b(sql file|\.sql)\b/i, "sql"],
+        [/\b(xml file|\.xml)\b/i, "xml"],
+        [/\b(yaml|\.yaml)\b/i, "yaml"],
+        [/\b(yml file|\.yml)\b/i, "yml"],
+        [/\b(rtf)\b/i, "rtf"],
+        [/\b(java file|\.java)\b/i, "java"],
+        [/\b(c\+\+|cpp file|\.cpp)\b/i, "cpp"],
+        [/\b(c source file|\.c)\b/i, "c"],
+        [/\b(shell script|bash script|\.sh)\b/i, "sh"],
+        [/\b(php file|\.php)\b/i, "php"],
+        [/\b(go file|\.go)\b/i, "go"],
+        [/\b(rust file|\.rs)\b/i, "rs"],
+        [/\b(toml file|\.toml)\b/i, "toml"],
+        [/\b(ini file|\.ini)\b/i, "ini"],
+        [/\b(ruby file|\.rb)\b/i, "rb"],
+        [/\b(swift file|\.swift)\b/i, "swift"],
+        [/\b(kotlin file|\.kt)\b/i, "kt"],
+        [/\b(dart file|\.dart)\b/i, "dart"],
+        [/\b(r source file|\.r)\b/i, "r"],
+        [/\b(scala file|\.scala)\b/i, "scala"],
+        [/\b(jsx file|\.jsx)\b/i, "jsx"],
+        [/\b(tsx file|\.tsx)\b/i, "tsx"],
+        [/\b(vue file|\.vue)\b/i, "vue"],
+        [/\b(svelte file|\.svelte)\b/i, "svelte"],
+        [/\b(scss file|\.scss)\b/i, "scss"],
+        [/\b(less file|\.less)\b/i, "less"],
+        [/\b(latex|\.tex)\b/i, "tex"],
+        [/\b(restructuredtext|\.rst)\b/i, "rst"],
+        [/\b(log file|\.log)\b/i, "log"],
+        [/\b(configuration file|\.conf)\b/i, "conf"],
+        [/\b(gradle file|\.gradle)\b/i, "gradle"]
+    ];
+    const formats = [...new Set(formatRules.filter(([pattern]) => pattern.test(raw)).map(([, format]) => format))];
+    const requestedExtension = raw.match(/\.([a-z0-9]{1,10})\b/i)?.[1]?.toLowerCase();
+    if (!formats.length && requestedExtension) formats.push(requestedExtension);
+    const mentionsFileOutput = /\b(file|document|report|spreadsheet|presentation|slides|slide deck|downloadable|script file|source file)\b/i.test(raw);
+    if (!hasCreateAction || (!formats.length && !mentionsFileOutput)) return null;
+    if (!formats.length) formats.push(/\b(document|report)\b/i.test(raw) ? "docx" : "txt");
+    return {
+        formats,
+        usePrevious: /\b(that|this|it|above|previous|last answer|last reply)\b/i.test(raw)
+    };
+}
 
-    voiceBtn.style.display="none";
+async function createGeneratedFile(content, format, requestedName = "") {
+    const response = await fetch("/api/create-file", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content, format, requestedName })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.message || "Could not create the requested file.");
+    return { downloadUrl: data.downloadUrl, filename: data.filename, format };
+}
 
+function getSelectedSpeechVoice() {
+    const selectedURI = voiceSelect?.value;
+    return availableSpeechVoices.find(voice => voice.voiceURI === selectedURI) || null;
+}
+
+function handleVoiceChangeRequest(text) {
+    const request = String(text).toLowerCase();
+    const asksToChangeVoice =
+        /\b(change|switch|use|try|pick|select)\b.{0,45}\b(voice|accent|speaker)\b/.test(request) ||
+        /\b(voice|accent|speaker)\b.{0,45}\b(change|switch|different|another|new)\b/.test(request);
+
+    if (!asksToChangeVoice) return null;
+
+    populateSpeechVoices();
+    if (availableSpeechVoices.length < 2) {
+        return "I can’t switch voices because your browser only provides one speech voice. Add another voice in your device or browser settings, then ask me again.";
+    }
+
+    const currentVoice = getSelectedSpeechVoice() ||
+        availableSpeechVoices.find(voice => voice.default) ||
+        availableSpeechVoices[0];
+    const currentIndex = availableSpeechVoices.findIndex(
+        voice => voice.voiceURI === currentVoice.voiceURI
+    );
+    const nextVoice = availableSpeechVoices[(currentIndex + 1) % availableSpeechVoices.length];
+
+    if (voiceSelect) voiceSelect.value = nextVoice.voiceURI;
+    localStorage.setItem("bzuSpeechVoiceURI", nextVoice.voiceURI);
+
+    return `Sure — I’ve changed my voice to ${nextVoice.name}.`;
+}
+
+if (window.speechSynthesis) {
+    populateSpeechVoices();
+    window.speechSynthesis.addEventListener("voiceschanged", populateSpeechVoices);
+}
+
+voiceSelect?.addEventListener("change", () => {
+    localStorage.setItem("bzuSpeechVoiceURI", voiceSelect.value);
+});
+
+previewVoiceBtn?.addEventListener("click", () => {
+    if (!window.speechSynthesis) return;
+
+    const preview = new SpeechSynthesisUtterance("Hello! This is how my voice sounds.");
+    const selectedVoice = getSelectedSpeechVoice();
+    if (selectedVoice) {
+        preview.voice = selectedVoice;
+        preview.lang = selectedVoice.lang;
+    }
+    preview.onend = () => {
+        if (voiceMode) resumeVoiceListening();
+    };
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(preview);
+});
+
+function updateVoiceButton() {
+    voiceBtn.classList.toggle("voice-active", voiceMode);
+    voiceBtn.classList.toggle("voice-listening", recognitionRunning && !voiceMode);
+    voiceBtn.setAttribute("aria-pressed", String(voiceMode || recognitionRunning));
+    voiceBtn.title = voiceMode
+        ? "Voice chat active — press to stop"
+        : recognitionRunning
+            ? pointerDown
+                ? "Speak now; release for voice chat or tap once for dictation"
+                : "Listening for dictation"
+            : "Tap to dictate; press and hold for voice chat";
+    voiceBtn.setAttribute("aria-label", voiceBtn.title);
+    voiceBtn.innerHTML = voiceMode
+        ? '<i class="fa-solid fa-microphone-lines"></i>'
+        : '<i class="fa-solid fa-microphone"></i>';
+}
+
+function finishVoiceChat() {
+    voiceMode = false;
+    pointerDown = false;
+    longPressTriggered = false;
+    voiceInputFinalized = true;
+    pendingVoiceTranscript = "";
+    assistantSpeechText = "";
+    assistantSpeechActive = false;
+    if (listenRestartTimer) {
+        window.clearTimeout(listenRestartTimer);
+        listenRestartTimer = null;
+    }
+    if (recognitionRunning) recognition.stop();
+    window.speechSynthesis?.cancel();
+    updateVoiceButton();
+}
+
+function speakReply(text) {
+    if (!voiceMode) return;
+    if (!window.speechSynthesis) {
+        resumeVoiceListening();
+        return;
+    }
+
+    window.speechSynthesis.cancel();
+    const spokenText = String(text)
+        .replace(/```[\s\S]*?```/g, " Code block omitted. ")
+        .replace(/`([^`]+)`/g, "$1")
+        .replace(/!?\[([^\]]+)\]\([^)]+\)/g, "$1")
+        .replace(/https?:\/\/\S+/g, "")
+        .replace(/[#*_>~]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+    if (!spokenText) {
+        resumeVoiceListening();
+        return;
+    }
+
+    assistantSpeechText = spokenText.toLowerCase();
+    assistantSpeechActive = true;
+    const utterance = new SpeechSynthesisUtterance(spokenText);
+    const selectedVoice = getSelectedSpeechVoice();
+    if (selectedVoice) {
+        utterance.voice = selectedVoice;
+        utterance.lang = selectedVoice.lang;
+    } else {
+        utterance.lang = recognition?.lang || "en-US";
+    }
+    utterance.onend = () => {
+        assistantSpeechActive = false;
+        resumeVoiceListening();
+    };
+    utterance.onerror = () => {
+        assistantSpeechActive = false;
+        resumeVoiceListening();
+    };
+    window.speechSynthesis.speak(utterance);
+    resumeVoiceListening();
+}
+
+function resumeVoiceListening() {
+    if (!voiceMode || isTyping || recognitionRunning ||
+        (window.speechSynthesis?.speaking && !assistantSpeechActive) || listenRestartTimer) return;
+
+    listenRestartTimer = window.setTimeout(() => {
+        listenRestartTimer = null;
+        if (!voiceMode || isTyping || recognitionRunning ||
+            (window.speechSynthesis?.speaking && !assistantSpeechActive)) return;
+        voiceInputFinalized = false;
+        pendingVoiceTranscript = "";
+        startVoiceRecognition();
+    }, 300);
+}
+
+function soundsLikeAssistantEcho(text) {
+    const candidate = String(text).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+    const response = assistantSpeechText.replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+    const words = candidate.split(/\s+/).filter(Boolean);
+    if (words.length < 2 || candidate.length < 10) return false;
+    if (response.includes(candidate)) return true;
+
+    const responseWords = new Set(response.split(/\s+/));
+    const matchedWords = words.filter(word => responseWords.has(word)).length;
+    return matchedWords / words.length >= 0.75;
+}
+
+function interruptAssistantSpeech() {
+    if (!assistantSpeechActive) return;
+    assistantSpeechActive = false;
+    window.speechSynthesis?.cancel();
+}
+
+function startVoiceRecognition() {
+    if (!recognition || recognitionRunning) return;
+    try {
+        recognition.start();
+        recognitionRunning = true;
+        updateVoiceButton();
+    } catch (error) {
+        console.warn("Unable to start voice recognition:", error);
+        pointerDown = false;
+        voiceMode = false;
+        voiceInputFinalized = true;
+        updateVoiceButton();
+    }
+}
+
+function finishVoiceInput() {
+    if (voiceInputFinalized) return;
+    voiceInputFinalized = true;
+    const transcript = pendingVoiceTranscript.trim();
+    pendingVoiceTranscript = "";
+
+    if (voiceMode) {
+        if (transcript) {
+            messageInput.value = transcript;
+            sendMessage();
+        } else {
+            resumeVoiceListening();
+        }
+        return;
+    }
+
+    if (!transcript) return;
+    messageInput.value = transcript;
+    messageInput.focus();
+    updateVoiceButton();
+}
+
+function beginHoldToTalk(event) {
+    if (voiceMode) {
+        event.preventDefault();
+        finishVoiceChat();
+        return;
+    }
+    if (!recognition || pointerDown || recognitionRunning) return;
+    if (event.type === "pointerdown" && event.button !== 0) return;
+    event.preventDefault();
+
+    pointerDown = true;
+    longPressTriggered = false;
+    voiceInputFinalized = false;
+    pendingVoiceTranscript = "";
+    startVoiceRecognition();
+
+    holdPressTimer = window.setTimeout(() => {
+        holdPressTimer = null;
+        if (!pointerDown) return;
+        longPressTriggered = true;
+        voiceMode = true;
+        updateVoiceButton();
+        window.speechSynthesis?.cancel();
+        if (!recognitionRunning) {
+            if (pendingVoiceTranscript.trim()) {
+                finishVoiceInput();
+            } else {
+                voiceInputFinalized = false;
+                startVoiceRecognition();
+            }
+        }
+    }, 400);
+}
+
+function endHoldToTalk() {
+    if (!pointerDown) return;
+    pointerDown = false;
+    if (holdPressTimer) {
+        window.clearTimeout(holdPressTimer);
+        holdPressTimer = null;
+    }
+    if (longPressTriggered && voiceMode) {
+        if (!recognitionRunning && !isTyping && !window.speechSynthesis?.speaking) {
+            resumeVoiceListening();
+        }
+        updateVoiceButton();
+        return;
+    }
+    if (longPressTriggered && recognitionRunning) {
+        recognition.stop();
+    } else if (!recognitionRunning) {
+        finishVoiceInput();
+    } else {
+        updateVoiceButton();
+    }
+}
+
+if (SpeechRecognition) {
+    recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+
+    recognition.onresult = (event) => {
+        for (let index = event.resultIndex; index < event.results.length; index++) {
+            const result = event.results[index];
+            const transcript = result[0]?.transcript?.trim();
+            if (!transcript) continue;
+
+            if (assistantSpeechActive && soundsLikeAssistantEcho(transcript)) continue;
+            if (assistantSpeechActive) interruptAssistantSpeech();
+
+            if (result.isFinal) {
+                pendingVoiceTranscript = `${pendingVoiceTranscript} ${transcript}`.trim();
+            }
+        }
+    };
+
+    recognition.onerror = (event) => {
+        recognitionRunning = false;
+        if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+            pointerDown = false;
+            finishVoiceChat();
+            alert("Microphone access was blocked. Allow microphone access in your browser and try again.");
+            return;
+        }
+        if (voiceMode && event.error !== "no-speech" && event.error !== "aborted") {
+            console.warn("Voice recognition error:", event.error);
+        }
+    };
+
+    recognition.onend = () => {
+        recognitionRunning = false;
+        updateVoiceButton();
+        if (voiceMode) {
+            finishVoiceInput();
+        } else if (pointerDown && longPressTriggered) {
+            window.setTimeout(() => {
+                if (pointerDown && longPressTriggered) startVoiceRecognition();
+            }, 200);
+        } else if (!pointerDown) {
+            finishVoiceInput();
+        }
+    };
+
+    voiceBtn.addEventListener("pointerdown", beginHoldToTalk);
+    window.addEventListener("pointerup", endHoldToTalk);
+    voiceBtn.addEventListener("pointercancel", endHoldToTalk);
+    voiceBtn.addEventListener("contextmenu", event => event.preventDefault());
+    voiceBtn.addEventListener("keydown", event => {
+        if ((event.key === " " || event.key === "Enter") && !event.repeat) {
+            beginHoldToTalk(event);
+        }
+    });
+    voiceBtn.addEventListener("keyup", event => {
+        if (event.key === " " || event.key === "Enter") endHoldToTalk();
+    });
+} else {
+    voiceBtn.title = "Voice input is not supported by this browser";
+    voiceBtn.setAttribute("aria-label", voiceBtn.title);
+    voiceBtn.disabled = true;
 }
 
 
