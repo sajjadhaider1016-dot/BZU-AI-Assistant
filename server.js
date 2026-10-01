@@ -695,9 +695,32 @@ function isBZUQuestion(message) {
         "zakariya university"
     ];
 
-    return bzuTerms.some((term) =>
-        text.includes(term)
+    if (bzuTerms.some((term) => text.includes(term))) return true;
+
+    // In this university-specific assistant, short campus-topic prompts such
+    // as "Hostel" should query BZU knowledge rather than get a generic answer.
+    // Keep explicit general-definition questions in general mode.
+    const asksForGeneralDefinition =
+        /\b(what is|what are|define|definition of|meaning of|in general|generally)\b/.test(text);
+    if (asksForGeneralDefinition) return false;
+
+    const campusTopics = [
+        "hostel", "hostels", "dormitory", "dormitories", "accommodation",
+        "admission", "admissions", "fee", "fees", "tuition", "scholarship",
+        "scholarships", "department", "departments", "faculty", "faculties",
+        "program", "programs", "degree", "degrees", "semester", "semesters",
+        "exam", "exams", "examination", "examinations", "result", "results",
+        "campus", "library", "libraries", "transport", "bus", "buses",
+        "eligibility", "merit", "prospectus", "timetable", "date sheet"
+    ];
+    const hasCampusTopic = campusTopics.some(term =>
+        new RegExp(`\\b${term}\\b`).test(text)
     );
+    if (!hasCampusTopic) return false;
+
+    const tokens = text.split(" ").filter(Boolean);
+    return tokens.length <= 5 ||
+        /\b(apply|application|available|availability|amount|price|cost|deadline|date|when|where|how much|how many|tell me|information|details|about|at|in|for)\b/.test(text);
 }
 
 // ======================================================
