@@ -859,6 +859,8 @@ async function sendMessage() {
 
     showTyping(fileToUpload ? "Uploading your file…" : "Thinking…");
 
+    let uploadProgressTimer = null;
+
     try {
 
         let uploadResult = null;
@@ -867,6 +869,28 @@ async function sendMessage() {
             const formData = new FormData();
             formData.append("file", fileToUpload);
             formData.append("instruction", text);
+            const progressId = window.crypto?.randomUUID?.()
+                || "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, char => {
+                    const random = Math.random() * 16 | 0;
+                    return (char === "x" ? random : (random & 0x3 | 0x8)).toString(16);
+                });
+            formData.append("progressId", progressId);
+            let progressRequestActive = false;
+            uploadProgressTimer = window.setInterval(async () => {
+                if (progressRequestActive) return;
+                progressRequestActive = true;
+                try {
+                    const progressResponse = await fetch(`/api/upload-progress/${encodeURIComponent(progressId)}`, { cache: "no-store" });
+                    if (progressResponse.ok) {
+                        const progress = await progressResponse.json();
+                        if (progress.status) updateTypingStatus(progress.status);
+                    }
+                } catch (error) {
+                    // The main upload request reports any actionable failure.
+                } finally {
+                    progressRequestActive = false;
+                }
+            }, 1000);
             if (text && (isUploadEditInstruction(text) || fileRequest)) formData.append("skipAnalysis", "true");
 
             for (let passwordAttempt = 0; passwordAttempt < 3; passwordAttempt++) {
@@ -888,6 +912,17 @@ async function sendMessage() {
             }
             if (!uploadResult?.success) {
                 throw new Error("I could not open this PDF with the password provided. Please check the password and try again.");
+            }
+
+            if (uploadResult.processing && uploadResult.progressId) {
+                if (uploadProgressTimer) {
+                    window.clearInterval(uploadProgressTimer);
+                    uploadProgressTimer = null;
+                }
+                const analysisResult = await waitForUploadAnalysis(uploadResult.progressId);
+                uploadResult.reply = analysisResult.error
+                    ? `I couldn’t complete the analysis of every book section: ${analysisResult.error}`
+                    : analysisResult.reply || "The book was processed, but I could not prepare the final analysis. Please try again.";
             }
 
             const attachment = uploadResult.attachment || {};
@@ -1161,6 +1196,7 @@ async function sendMessage() {
 
     finally {
 
+        if (uploadProgressTimer) window.clearInterval(uploadProgressTimer);
         isTyping = false;
 
         if (voiceMode) resumeVoiceListening();
@@ -1901,6 +1937,19 @@ function getFileWorkStatus(request, format) {
     if (/\b(assignment|coursework|homework|essay|research paper|lab report)\b/i.test(text)) return "Structuring your assignment…";
     if (["js", "ts", "py", "java", "cpp", "c", "php", "go", "rs", "jsx", "tsx"].includes(format)) return "Writing your code…";
     return "Preparing your requested content…";
+}
+
+async function waitForUploadAnalysis(progressId) {
+    const deadline = Date.now() + 30 * 60 * 1000;
+    while (Date.now() < deadline) {
+        const response = await fetch(`/api/upload-progress/${encodeURIComponent(progressId)}`, { cache: "no-store" });
+        if (!response.ok) throw new Error("The book analysis status was lost. Please upload the book again.");
+        const progress = await response.json();
+        if (progress.status) updateTypingStatus(progress.status);
+        if (progress.complete) return progress.result || {};
+        await new Promise(resolve => window.setTimeout(resolve, 1200));
+    }
+    throw new Error("The book is taking longer than expected to analyze. Please try a smaller file or upload the book again.");
 }
 
 async function createGeneratedFile(content, format, requestedName = "") {
