@@ -517,7 +517,7 @@ function createDownloadFilename(requestedName, content, format) {
         .replace(/[\u0300-\u036f]/g, "")
         .replace(/\.[a-z0-9]{1,10}\b/gi, " ")
         .replace(/\b(create|generate|make|write|export|download|please|a|an|the|file|document|named|called|as|in|format|for|me|of)\b/gi, " ")
-        .replace(/\b(pdf|docx|doc|word|html|xlsx|xls|excel|csv|json|txt|text|pptx|powerpoint|markdown|md)\b/gi, " ")
+        .replace(/\b(pdf|docx|doc|word|html|xlsx|xls|excel|csv|json|txt|text|pptx?|powerpoint|markdown|md)\b/gi, " ")
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-+|-+$/g, "")
