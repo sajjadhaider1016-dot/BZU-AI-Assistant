@@ -874,6 +874,10 @@ async function sendMessage() {
     const fileToUpload = pendingUploadFile;
 
     if ((!text && !fileToUpload) || isTyping) return;
+    if (fileToUpload && fileToUpload.size === 0) {
+        addAIMessage(`“${fileToUpload.name || "This file"}” is empty (0 bytes), so it cannot be read. Download or copy the complete file again, then attach it.`);
+        return;
+    }
 
     const typedImagePrompt = fileToUpload ? null : imagePromptFromMessage(text);
     if (typedImagePrompt) {
@@ -1910,7 +1914,12 @@ function attachFiles(files) {
                 "text/plain": "txt"
             })[file.type] || "bin";
             return new File([file], `pasted-file.${extension}`, { type: file.type, lastModified: file.lastModified });
-        });
+        })
+        .filter(file => file.size > 0);
+    if (!selectedFiles.length) {
+        addAIMessage("The selected file is empty (0 bytes), so it cannot be uploaded. Download or copy the complete file again and try once more.");
+        return;
+    }
     if (!selectedFiles.length) return;
     pendingUploadFile = selectedFiles[0];
     pendingUploadBatchCount = selectedFiles.length;

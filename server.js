@@ -2066,6 +2066,26 @@ app.post(
                 });
             }
 
+            let receivedFileBytes = 0;
+            try {
+                receivedFileBytes = fs.statSync(req.file.path).size;
+            } catch (error) {
+                console.error("UPLOAD TEMP FILE MISSING:", req.file.originalname, error?.message || error);
+            }
+            console.info("UPLOAD RECEIVED:", JSON.stringify({
+                name: path.basename(req.file.originalname || "upload"),
+                type: req.file.mimetype,
+                multerBytes: req.file.size,
+                savedBytes: receivedFileBytes
+            }));
+            if (!receivedFileBytes || !req.file.size || receivedFileBytes !== req.file.size) {
+                fs.rmSync(req.file.path, { force: true });
+                return res.status(400).json({
+                    success: false,
+                    reply: "The uploaded file arrived empty or incomplete (0 bytes). Check that the original file opens and has a non-zero size, then download or copy it again and reattach it."
+                });
+            }
+
             if (!req.session?.userId) {
                 fs.rmSync(req.file.path, { force: true });
                 return res.status(401).json({ success: false, reply: "Please sign in before uploading a file." });
