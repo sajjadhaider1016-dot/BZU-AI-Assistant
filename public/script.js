@@ -440,16 +440,38 @@ function addAIMessage(text, extra = {}) {
 
 }
 
-async function generateImage() {
-    const prompt = window.prompt("Describe the image you want to create (up to 500 characters):");
+function imagePromptFromMessage(message) {
+    const raw = String(message || "").trim();
+    const media = "(?:image|picture|photo|artwork|illustration|drawing|logo|poster|wallpaper|portrait|icon|thumbnail|tasveer|tasvir|تصویر|صورة)";
+    const hasEnglishCreationIntent =
+        new RegExp(`\\b(create|generate|make|draw|design|illustrate|paint|render)\\b[\\s\\S]{0,100}\\b${media}\\b`, "i").test(raw) ||
+        new RegExp(`\\b(i want|show me|give me)\\b[\\s\\S]{0,45}\\b${media}\\b`, "i").test(raw);
+    const hasRomanUrduCreationIntent =
+        /\b(tasveer|tasvir|تصویر|صورة)\b[\s\S]{0,60}\b(banao|bnao|bana do|bana dein|bana den|انشئ|أنشئ|اصنع|ارسم)\b/i.test(raw) ||
+        /\b(banao|bnao|bana do|bana dein|bana den|انشئ|أنشئ|اصنع|ارسم)\b[\s\S]{0,60}\b(tasveer|tasvir|تصویر|صورة)\b/i.test(raw);
+    if (!hasEnglishCreationIntent && !hasRomanUrduCreationIntent) return null;
+    if (/^\s*(how do|how can|what is|what are|why does|explain|tell me about)\b/i.test(raw)) return null;
+
+    const description = raw.match(new RegExp(`\\b${media}\\b\\s*(?:of|showing|with|for|about)?\\s+([\\s\\S]+)$`, "i"));
+    return (description?.[1] || raw).trim();
+}
+
+async function generateImage(promptValue = null, originalUserText = "") {
+    if (isTyping) return;
+    const prompt = promptValue || window.prompt("Describe the image you want to create (up to 500 characters):");
     if (!prompt || !prompt.trim()) return;
     const cleanedPrompt = prompt.trim();
+    if (cleanedPrompt.length > 500) {
+        alert("Please keep the image description to 500 characters or fewer.");
+        return;
+    }
+    isTyping = true;
     imageGenerateBtn.disabled = true;
     imageGenerateBtn.title = "Generating image…";
     welcomeScreen.style.display = "none";
     chatContainer.style.display = "flex";
 
-    const userText = `Create an image: ${cleanedPrompt}`;
+    const userText = originalUserText || `Create an image: ${cleanedPrompt}`;
     currentChat.push({ role: "user", text: userText });
     addUserMessage(userText);
 
@@ -542,6 +564,8 @@ async function generateImage() {
     } finally {
         imageGenerateBtn.disabled = false;
         imageGenerateBtn.title = "Generate an image using the shared free allowance";
+        isTyping = false;
+        if (voiceMode) resumeVoiceListening();
     }
 }
 
@@ -770,6 +794,14 @@ async function sendMessage() {
 
     if ((!text && !fileToUpload) || isTyping) return;
 
+    const typedImagePrompt = fileToUpload ? null : imagePromptFromMessage(text);
+    if (typedImagePrompt) {
+        messageInput.value = "";
+        messageInput.style.height = "auto";
+        await generateImage(typedImagePrompt, text);
+        return;
+    }
+
     const fileRequest = requestedFileRequest(text);
     const previousAssistantReply = [...currentChat].reverse()
         .find(message => message.role === "assistant")?.text || "";
@@ -824,12 +856,24 @@ async function sendMessage() {
             formData.append("instruction", text);
             if (text && (isUploadEditInstruction(text) || fileRequest)) formData.append("skipAnalysis", "true");
 
-            const uploadResponse = await fetch("/upload", { method: "POST", body: formData });
-            const uploadBody = await uploadResponse.text();
-            try { uploadResult = JSON.parse(uploadBody); }
-            catch { throw new Error(uploadBody || "The file could not be uploaded."); }
-            if (!uploadResponse.ok || !uploadResult.success) {
-                throw new Error(uploadResult.reply || uploadResult.message || "The file could not be uploaded.");
+            for (let passwordAttempt = 0; passwordAttempt < 3; passwordAttempt++) {
+                const uploadResponse = await fetch("/upload", { method: "POST", body: formData });
+                const uploadBody = await uploadResponse.text();
+                try { uploadResult = JSON.parse(uploadBody); }
+                catch { throw new Error(uploadBody || "The file could not be uploaded."); }
+                if (uploadResult.requiresPassword) {
+                    const password = window.prompt(uploadResult.reply || "This PDF is password-protected. Enter its password to continue.");
+                    if (password === null || !password.trim()) throw new Error("PDF reading was cancelled because no password was provided.");
+                    formData.set("pdfPassword", password);
+                    continue;
+                }
+                if (!uploadResponse.ok || !uploadResult.success) {
+                    throw new Error(uploadResult.reply || uploadResult.message || "The file could not be uploaded.");
+                }
+                break;
+            }
+            if (!uploadResult?.success) {
+                throw new Error("I could not open this PDF with the password provided. Please check the password and try again.");
             }
 
             const attachment = uploadResult.attachment || {};
@@ -1739,10 +1783,11 @@ function requestedFileRequest(request) {
         [/\b(pdf file|pdf document|pdf report|pdf version|as (?:a )?pdf|into (?:a )?pdf|to (?:a )?pdf|(?:its|it|this|that) pdf|(?:create|make|generate|give|get|provide)\s+(?:me\s+)?(?:a\s+)?pdf|\.pdf)\b/i, "pdf"],
         [/\b(docx|word document|word file|word doc|microsoft word|as (?:a )?word|into (?:a )?word|to word|in word|\.docx)\b/i, "docx"],
         [/\b(xlsx|excel file|excel spreadsheet|spreadsheet file|as excel|into excel|to excel|\.xlsx)\b/i, "xlsx"],
-        [/\b(pptx|powerpoint file|powerpoint presentation|presentation file|slide deck|as powerpoint|to powerpoint|\.pptx)\b/i, "pptx"],
+        [/\b(pptx|powerpoint file|powerpoint presentation|presentation file|presentation|slide deck|slides|as powerpoint|to powerpoint|\.pptx)\b/i, "pptx"],
         [/\b(csv file|as csv|to csv|\.csv)\b/i, "csv"],
         [/\b(json file|as json|to json|\.json)\b/i, "json"],
-        [/\b(html file|html document|html page|web page|website file|as html|in html|\.html)\b/i, "html"],
+        [/\b(html file|html document|html page|web page|webpage|website|website file|as html|in html|\.html)\b/i, "html"],
+        [/\b(spreadsheet|workbook)\b/i, "xlsx"],
         [/\b(markdown file|as markdown|to markdown|\.md)\b/i, "md"],
         [/\b(text file|txt file|\.txt)\b/i, "txt"],
         [/\b(javascript file|js file|\.js)\b/i, "js"],
@@ -1784,9 +1829,14 @@ function requestedFileRequest(request) {
     const formats = [...new Set(formatRules.filter(([pattern]) => pattern.test(raw)).map(([, format]) => format))];
     const requestedExtension = raw.match(/\.([a-z0-9]{1,10})\b/i)?.[1]?.toLowerCase();
     if (!formats.length && requestedExtension) formats.push(requestedExtension);
-    const mentionsFileOutput = /\b(file|document|report|spreadsheet|presentation|slides|slide deck|downloadable|script file|source file)\b/i.test(raw);
+    const mentionsFileOutput = /\b(file|document|report|spreadsheet|presentation|slides|slide deck|downloadable|script file|source file|website|webpage|web page)\b/i.test(raw);
     if (!hasCreateAction || (!formats.length && !mentionsFileOutput)) return null;
-    if (!formats.length) formats.push(/\b(document|report)\b/i.test(raw) ? "docx" : "txt");
+    if (!formats.length) {
+        if (/\b(presentation|slides|slide deck)\b/i.test(raw)) formats.push("pptx");
+        else if (/\b(spreadsheet|workbook)\b/i.test(raw)) formats.push("xlsx");
+        else if (/\b(website|webpage|web page)\b/i.test(raw)) formats.push("html");
+        else formats.push(/\b(document|report|resume|résumé|cv|essay|letter|proposal)\b/i.test(raw) ? "docx" : "txt");
+    }
     return {
         formats,
         usePrevious: /\b(that|this|it|its|above|previous|last answer|last reply|uploaded|attached)\b/i.test(raw)
