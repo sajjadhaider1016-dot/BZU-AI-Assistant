@@ -1004,6 +1004,8 @@ body{
 
     display:flex;
 
+    align-items:center;
+
     gap:6px;
 
     background:var(--card);
@@ -1105,6 +1107,18 @@ body{
     height:42px;
     border-radius:50%;
     animation:voice-pulse 1.5s ease-in-out infinite;
+}
+
+.typing-status-text {
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    margin-right: 6px;
+    white-space: nowrap;
+}
+
+body.dark .typing-status-text {
+    color: var(--text);
 }
 
 .pending-attachment-preview {

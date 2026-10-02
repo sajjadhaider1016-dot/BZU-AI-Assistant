@@ -205,7 +205,7 @@ const generatedFilesDirectory = path.join(dataDirectory, "generated-files");
 const uploadedFilesDirectory = path.join(dataDirectory, "uploaded-files");
 const generatedFileExtensions = new Set([
     "pdf", "docx", "xlsx", "pptx", "txt", "md", "csv", "json", "html",
-    "js", "ts", "css", "py", "sql", "xml", "yaml", "yml", "rtf",
+    "js", "ts", "css", "py", "sql", "xml", "yaml", "yml", "rtf", "cs",
     "java", "c", "cpp", "h", "sh", "php", "go", "rs", "toml", "ini",
     "rb", "swift", "kt", "dart", "r", "scala", "jsx", "tsx", "vue",
     "svelte", "scss", "less", "tex", "rst", "log", "conf", "gradle"
@@ -672,6 +672,10 @@ console.log("=================================");
 
 const MAX_CHAT_TOKENS = 800;
 const MAX_DOCUMENT_TOKENS = 4000;
+const MAX_GENERATION_TOKENS = Math.min(
+    12000,
+    Math.max(1000, Number.parseInt(process.env.MAX_GENERATION_TOKENS, 10) || 7000)
+);
 const MAX_BOOK_TEXT_CHARS = 5_000_000;
 const PDF_OCR_LANGUAGES = process.env.PDF_OCR_LANGUAGES || "eng+urd+ara";
 // ======================================================
@@ -1543,6 +1547,18 @@ Always answer ONLY the CURRENT USER QUESTION.
 Keep simple answers concise.
 
 Use headings, bullets, tables, or examples when useful.
+
+======================================================
+CODING, ASSIGNMENTS, AND CREATION QUALITY
+======================================================
+
+For programming requests, understand the requested language, framework, runtime, and goal before writing. Give complete, runnable code when the user asks for code; keep code syntactically consistent, handle ordinary errors and edge cases, and avoid TODOs, omitted sections, or fake APIs. If the user gives existing code, preserve its conventions and explain the actual fix. Include brief run/setup instructions when they are needed to use the result.
+
+For academic assignments, match the requested course level, topic, format, and word count. Use a clear title, logical sections, accurate explanations, examples where helpful, and a conclusion when suitable. Do not invent quotations, statistics, or references. If the user requests citations, use only sources you can identify reliably and clearly flag any source details that need verification.
+
+For website requests, produce a complete, polished, responsive result that follows the requested purpose and visual direction. When creating an HTML file, return a complete document with semantic markup, accessible controls, responsive CSS, and working client-side interactions; keep CSS and JavaScript in the same file unless the user explicitly asks for a multi-file project. Do not claim forms, accounts, databases, payments, or APIs work unless the implementation actually connects them.
+
+When creating files, include the requested content in the file itself. Prefer a useful, complete deliverable over a short outline. Respect explicit scope and length requirements, and do not pad the result with unrelated material.
 `;
 
         // ==================================================
@@ -1571,16 +1587,21 @@ Use headings, bullets, tables, or examples when useful.
 
         const normalizedFileFormat = String(fileFormat).toLowerCase();
         const fileFormatHint = {
-            docx: "Return the complete document's textual content only. Do not return Base64, ZIP data, or binary bytes; the application creates the DOCX file.",
+            docx: "Return a complete, polished document with a clear title, appropriate headings, readable paragraphs, and useful examples when suitable. Return textual content only. Do not return Base64, ZIP data, or binary bytes; the application creates the DOCX file.",
             csv: "Return valid CSV only, with a header row.",
             xlsx: "Return a clean comma-separated table with a header row so it can be placed into a spreadsheet.",
-            pptx: "Write a presentation outline using one Markdown heading per slide and concise bullet points under each heading.",
+            pptx: "Create a complete, presentation-ready slide sequence. Use one Markdown heading per slide, concise bullets, a logical opening and conclusion, and enough substantive detail for the requested audience; avoid overloading slides.",
             json: "Return valid JSON only.",
-            html: "Return a complete, valid HTML document only.",
-            js: "Return valid JavaScript source code only.",
-            ts: "Return valid TypeScript source code only.",
-            py: "Return valid Python source code only.",
-            css: "Return valid CSS source code only."
+            html: "Return one complete, valid, self-contained HTML document only, with responsive CSS and working JavaScript inline as appropriate. Make it polished, accessible, and usable on mobile and desktop. Do not leave placeholder sections or refer to files that you did not provide.",
+            js: "Return complete, runnable JavaScript source code only. Include required input validation and error handling; do not use placeholders or omit requested functions.",
+            ts: "Return complete TypeScript source code only, with appropriate types and error handling; do not use placeholders or omit requested functions.",
+            py: "Return complete, runnable Python source code only. Include appropriate input validation and error handling; do not use placeholders or omit requested functions.",
+            java: "Return a complete Java source file only. Include required imports and a runnable entry point when appropriate; do not omit requested methods or use placeholders.",
+            cs: "Return complete, runnable C# source code only. Include appropriate types, required imports, and a runnable entry point when appropriate; do not use placeholders.",
+            cpp: "Return complete, compilable C++ source code only. Include required headers and a runnable entry point when appropriate; do not omit requested functions or use placeholders.",
+            c: "Return complete, compilable C source code only. Include required headers and a runnable entry point when appropriate; do not omit requested functions or use placeholders.",
+            css: "Return complete, valid CSS only, scoped and organized for the requested interface.",
+            txt: "Return the complete requested text artifact only. If it contains source code, use the requested language's correct syntax, include all requested functions, and omit conversational introductions."
         }[normalizedFileFormat] || "Use the correct syntax and structure for the requested file type.";
 
         chatMessages.push({
@@ -1615,7 +1636,7 @@ Use headings, bullets, tables, or examples when useful.
                 temperature: 0.2,
 
                 max_tokens: generatedFileExtensions.has(normalizedFileFormat)
-                    ? MAX_DOCUMENT_TOKENS
+                    ? MAX_GENERATION_TOKENS
                     : MAX_CHAT_TOKENS
             });
 
@@ -1626,6 +1647,14 @@ Use headings, bullets, tables, or examples when useful.
         const reply =
             completion?.choices?.[0]?.message?.content ||
             "I could not generate a response.";
+
+        const finishReason = completion?.choices?.[0]?.finish_reason;
+        if (generatedFileExtensions.has(normalizedFileFormat) && finishReason === "length") {
+            return res.status(502).json({
+                success: false,
+                reply: "The requested file exceeded the AI response limit before it was complete. Please ask for a smaller scope or split the project into parts."
+            });
+        }
 
         console.log("=================================");
         console.log("AI REPLY LENGTH:", reply.length);

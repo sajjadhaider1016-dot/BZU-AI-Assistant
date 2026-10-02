@@ -993,7 +993,11 @@ async function sendMessage() {
             return;
         }
 
-        updateTypingStatus(fileToUpload ? "Analyzing the uploaded file…" : "Thinking…");
+        updateTypingStatus(fileToUpload
+            ? "Analyzing the uploaded file…"
+            : fileRequest
+                ? getFileWorkStatus(text, fileRequest.formats[0])
+                : "Thinking…");
         const response = await fetch("/chat", {
 
             method: "POST",
@@ -1796,7 +1800,7 @@ function populateSpeechVoices() {
 
 function requestedFileRequest(request) {
     const raw = String(request || "");
-    const hasCreateAction = /\b(create|make|generate|export|download|save|convert|turn|put|prepare|write|send|give|get|provide)\b/i.test(raw)
+    const hasCreateAction = /\b(create|make|generate|export|download|save|convert|turn|put|prepare|write|send|give|get|provide|build|develop|design|implement)\b/i.test(raw)
         || /\b(?:want|need)\s+(?:a|an|the|this|that|my|your)?\s*(?:file|document|pdf|word|docx|xlsx|pptx|csv|json|txt)\b/i.test(raw);
     const formatRules = [
         [/\b(pdf file|pdf document|pdf report|pdf version|as (?:a )?pdf|into (?:a )?pdf|to (?:a )?pdf|(?:its|it|this|that) pdf|(?:create|make|generate|give|get|provide)\s+(?:me\s+)?(?:a\s+)?pdf|\.pdf)\b/i, "pdf"],
@@ -1848,19 +1852,53 @@ function requestedFileRequest(request) {
     const formats = [...new Set(formatRules.filter(([pattern]) => pattern.test(raw)).map(([, format]) => format))];
     const requestedExtension = raw.match(/\.([a-z0-9]{1,10})\b/i)?.[1]?.toLowerCase();
     if (!formats.length && requestedExtension) formats.push(requestedExtension);
-    const mentionsFileOutput = /\b(file|document|report|spreadsheet|presentation|slides|slide deck|downloadable|script file|source file|website|webpage|web page)\b/i.test(raw);
+    const mentionsFileOutput = /\b(file|document|report|spreadsheet|presentation|slides|slide deck|downloadable|script file|source file|website|webpage|web page|assignment|coursework|homework|essay|code|program|script|source code)\b/i.test(raw);
     if (!hasCreateAction || (!formats.length && !mentionsFileOutput)) return null;
     if (!formats.length) {
         if (/\b(presentation|slides|slide deck)\b/i.test(raw)) formats.push("pptx");
         else if (/\b(spreadsheet|workbook)\b/i.test(raw)) formats.push("xlsx");
         else if (/\b(website|webpage|web page)\b/i.test(raw)) formats.push("html");
-        else formats.push(/\b(document|report|resume|résumé|cv|essay|letter|proposal)\b/i.test(raw) ? "docx" : "txt");
+        else if (/\b(assignment|coursework|homework|essay|research paper|lab report|document|report|resume|résumé|cv|letter|proposal)\b/i.test(raw)) formats.push("docx");
+        else {
+            const codeFormats = [
+                [/\b(python|python script)\b/i, "py"],
+                [/\b(javascript|node\.js)\b/i, "js"],
+                [/\btypescript\b/i, "ts"],
+                [/\b(java)\b/i, "java"],
+                [/\b(c#|c sharp)\b/i, "cs"],
+                [/\b(c\+\+|cpp)\b/i, "cpp"],
+                [/\b(c programming|c language)\b/i, "c"],
+                [/\b(php)\b/i, "php"],
+                [/\b(rust)\b/i, "rs"],
+                [/\b(go language|golang)\b/i, "go"],
+                [/\b(ruby)\b/i, "rb"],
+                [/\b(swift)\b/i, "swift"],
+                [/\b(kotlin)\b/i, "kt"],
+                [/\b(dart)\b/i, "dart"],
+                [/\b(r programming|r language)\b/i, "r"],
+                [/\b(scala)\b/i, "scala"],
+                [/\b(bash|shell script)\b/i, "sh"],
+                [/\b(sql)\b/i, "sql"],
+                [/\b(html)\b/i, "html"],
+                [/\b(css)\b/i, "css"]
+            ];
+            const detectedCodeFormat = codeFormats.find(([pattern]) => pattern.test(raw))?.[1];
+            formats.push(detectedCodeFormat || "txt");
+        }
     }
     return {
         formats,
         usePrevious: /\b(that|this|it|its|above|previous|last answer|last reply|uploaded|attached)\b/i.test(raw)
             || /\b(?:the|my|that|this|uploaded|attached)\s+(?:file|image|photo|picture|document|spreadsheet)\b/i.test(raw)
     };
+}
+
+function getFileWorkStatus(request, format) {
+    const text = String(request || "");
+    if (/\b(website|web page|webpage|landing page|web app)\b/i.test(text)) return "Planning your website…";
+    if (/\b(assignment|coursework|homework|essay|research paper|lab report)\b/i.test(text)) return "Structuring your assignment…";
+    if (["js", "ts", "py", "java", "cpp", "c", "php", "go", "rs", "jsx", "tsx"].includes(format)) return "Writing your code…";
+    return "Preparing your requested content…";
 }
 
 async function createGeneratedFile(content, format, requestedName = "") {
