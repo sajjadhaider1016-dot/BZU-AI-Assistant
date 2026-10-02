@@ -2022,12 +2022,12 @@ function populateSpeechVoices() {
 function requestedFileRequest(request) {
     const raw = String(request || "");
     const hasCreateAction = /\b(create|make|generate|export|download|save|convert|turn|put|prepare|write|send|give|get|provide|build|develop|design|implement)\b/i.test(raw)
-        || /\b(?:want|need)\s+(?:a|an|the|this|that|my|your)?\s*(?:file|document|pdf|word|docx|xlsx|pptx|csv|json|txt)\b/i.test(raw);
+        || /\b(?:want|need|would like)\b.{0,35}\b(?:file|document|pdf|word|docx|xlsx|pptx|powerpoint|presentation|slides?|slide deck|csv|json|txt)\b/i.test(raw);
     const formatRules = [
         [/\b(pdf file|pdf document|pdf report|pdf version|as (?:a )?pdf|into (?:a )?pdf|to (?:a )?pdf|(?:its|it|this|that) pdf|(?:create|make|generate|give|get|provide)\s+(?:me\s+)?(?:a\s+)?pdf|\.pdf)\b/i, "pdf"],
         [/\b(docx|word document|word file|word doc|microsoft word|as (?:a )?word|into (?:a )?word|to word|in word|\.docx)\b/i, "docx"],
         [/\b(xlsx|excel file|excel spreadsheet|spreadsheet file|as excel|into excel|to excel|\.xlsx)\b/i, "xlsx"],
-        [/\b(pptx|powerpoint file|powerpoint presentation|presentation file|presentation|slide deck|slides|as powerpoint|to powerpoint|\.pptx)\b/i, "pptx"],
+        [/\b(pptx|powerpoint|presentation|slide deck|slides|\.pptx)\b/i, "pptx"],
         [/\b(csv file|as csv|to csv|\.csv)\b/i, "csv"],
         [/\b(json file|as json|to json|\.json)\b/i, "json"],
         [/\b(html file|html document|html page|web page|webpage|website|website file|as html|in html|\.html)\b/i, "html"],
