@@ -862,7 +862,7 @@ function isUploadEditInstruction(text) {
 }
 
 function isUploadedDocumentFollowUp(text) {
-    return /\b(book|document|pdf|file|chapter|page|author|according to|based on|from (?:the )?(?:book|document|file|it|this)|in (?:the )?(?:book|document|file|it|this)|uploaded|attached|summari[sz]e|summary|key (?:ideas|points|arguments)|main (?:idea|argument)|explain|analy[sz]e|extract|quote|what does it say|what is discussed|who is mentioned)\b/i.test(String(text || "")) ||
+    return /\b(book|document|pdf|pptx?|powerpoint|presentation|slide(?:s| deck)?|file|chapter|page|author|according to|based on|from (?:the )?(?:book|document|file|it|this)|in (?:the )?(?:book|document|file|it|this)|uploaded|attached|summari[sz]e|summary|key (?:ideas|points|arguments)|main (?:idea|argument)|explain|analy[sz]e|extract|quote|what does it say|what is discussed|who is mentioned)\b/i.test(String(text || "")) ||
         /\b(kitab|kitaab|book|pdf|file|chapter|safha|safhay|is mein|is me|iss mein|iss me|is kitab|is kitaab|uploaded|attached|khulasa|mukhtasar|ahm nuqat|markazi khayal|samjhao|tashreeh|parho|parhna|mazmoon|musannif)\b/i.test(String(text || "")) ||
         /(کتاب|باب|صفحہ|فائل|خلاصہ|اہم نکات|وضاحت|مصنف|تحلیل|الكتاب|الفصل|الصفحة|الملف|ملخص|لخص|اشرح|المؤلف|libro|documento|capítulo|página|resumen|autor|analiza|explica|livre|chapitre|page|résumé|auteur|analyse|explique)/i.test(String(text || ""));
 }
@@ -1189,7 +1189,7 @@ async function sendMessage() {
 
         let displayedReply = aiReply;
         let assistantMessage;
-        if (fileRequest) {
+        if (fileRequest && !(fileRequest.formats.includes("pptx") && isPresentationClarification(aiReply))) {
             try {
                 showTyping("Preparing your requested file…");
                 const contentForFile = fileRequest.usePrevious && previousAssistantReply
@@ -2116,10 +2116,16 @@ function requestedFileRequest(request) {
 
 function getFileWorkStatus(request, format) {
     const text = String(request || "");
+    if (format === "pptx") return "Building your presentation slides…";
     if (/\b(website|web page|webpage|landing page|web app)\b/i.test(text)) return "Planning your website…";
     if (/\b(assignment|coursework|homework|essay|research paper|lab report)\b/i.test(text)) return "Structuring your assignment…";
     if (["js", "ts", "py", "java", "cpp", "c", "php", "go", "rs", "jsx", "tsx"].includes(format)) return "Writing your code…";
     return "Preparing your requested content…";
+}
+
+function isPresentationClarification(reply) {
+    const text = String(reply || "").trim();
+    return text.endsWith("?") && /\b(?:what (?:topic|subject)|which (?:topic|subject)|what should (?:the )?(?:presentation|slides|deck)|what would you like (?:the )?(?:presentation|slides|deck) to be about|please (?:provide|specify|tell me)|could you (?:provide|specify|tell me))\b/i.test(text);
 }
 
 async function waitForUploadAnalysis(progressId) {

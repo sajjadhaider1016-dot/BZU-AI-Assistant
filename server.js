@@ -44,6 +44,7 @@ const OpenAI = require("openai");
 const multer = require("multer");
 const { PDFParse } = require("pdf-parse");
 const { CanvasFactory } = require("pdf-parse/worker");
+const docstream = require("@jose.espana/docstream");
 const mammoth = require("mammoth");
 const Tesseract = require("tesseract.js");
 const { InferenceClient } = require("@huggingface/inference");
@@ -256,6 +257,60 @@ function parseDelimitedRows(text) {
     });
 }
 
+function parsePresentationSlides(text) {
+    const source = String(text || "")
+        .replace(/^```(?:markdown|md|text)?\s*/i, "")
+        .replace(/\s*```$/i, "")
+        .trim();
+    if (!source) return [];
+
+    let sections = source.split(/^\s*---\s*$/m).map(section => section.trim()).filter(Boolean);
+    if (sections.length === 1) {
+        const lines = source.split(/\r?\n/);
+        const headingIndexes = [];
+        lines.forEach((line, index) => {
+            if (/^\s*(?:#{1,3}\s*)?slide\s*\d+\s*[:.)–—-]\s*.+$/i.test(line) || /^\s*#{1,3}\s+.+$/.test(line)) headingIndexes.push(index);
+        });
+        if (headingIndexes.length > 1) {
+            sections = headingIndexes.map((start, index) =>
+                lines.slice(start, headingIndexes[index + 1] ?? lines.length).join("\n").trim()
+            ).filter(Boolean);
+        }
+    }
+
+    let slides = sections.map((section, index) => {
+        const lines = section.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+        const titleLineIndex = lines.findIndex(line => /^\s*(?:#{1,3}\s*)?slide\s*\d+\s*[:.)–—-]\s*.+$/i.test(line) || /^#{1,3}\s+/.test(line));
+        const titleLine = titleLineIndex >= 0 ? lines.splice(titleLineIndex, 1)[0] : lines.shift();
+        const title = String(titleLine || `Slide ${index + 1}`)
+            .replace(/^#{1,6}\s*/, "")
+            .replace(/^(?:slide\s*)?\d+\s*[:.)–—-]\s*/i, "")
+            .replace(/\*\*/g, "")
+            .trim() || `Slide ${index + 1}`;
+        const body = lines.map(line => line
+            .replace(/^[-*•]\s+/, "")
+            .replace(/^\d+[.)]\s+/, "")
+            .replace(/\*\*(.*?)\*\*/g, "$1")
+            .replace(/`([^`]+)`/g, "$1")
+            .trim()
+        ).filter(Boolean);
+        return { title, body };
+    });
+
+    // Recover gracefully if the model returned ordinary paragraphs instead of
+    // the requested slide outline. Keep every paragraph in the deck.
+    if (sections.length === 1 && sections[0] && !/^\s*(?:#{1,3}\s*)?slide\s*\d+\s*[:.)–—-]/i.test(sections[0])) {
+        const paragraphs = source.split(/\n\s*\n/).map(part => part.trim()).filter(Boolean);
+        if (paragraphs.length > 1) {
+            const first = paragraphs.shift().replace(/^#{1,6}\s*/, "").trim();
+            const chunks = [];
+            for (let i = 0; i < paragraphs.length; i += 4) chunks.push(paragraphs.slice(i, i + 4));
+            slides = [{ title: first.slice(0, 90) || "Overview", body: [] }, ...chunks.map((body, index) => ({ title: index ? `Key Ideas ${index + 1}` : "Key Ideas", body }))];
+        }
+    }
+    return slides;
+}
+
 async function buildGeneratedFile(format, text) {
     if (["pdf", "docx", "pptx", "xlsx"].includes(format) && text.length > 50000) {
         throw new Error("Office documents are limited to 50,000 characters per file.");
@@ -295,32 +350,59 @@ async function buildGeneratedFile(format, text) {
         return Buffer.from(await workbook.xlsx.writeBuffer());
     }
     if (format === "pptx") {
+        if (String(text || "").trim().length < 500 && /\b(?:i (?:cannot|can't|could not|couldn't)|unable to|not able to)\b.{0,100}\b(?:create|generate|make|produce|provide)\b/i.test(String(text || ""))) {
+            throw new Error("I couldn't create the presentation content. Please try again with a clear topic and purpose.");
+        }
         const pptx = new PptxGenJS();
         pptx.layout = "LAYOUT_WIDE";
         pptx.author = "BZU AI Assistant";
-        const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
-        const chunks = [];
-        let chunk = [];
-        for (const line of lines) {
-            if (/^#{1,2}\s+/.test(line) && chunk.length) { chunks.push(chunk); chunk = []; }
-            chunk.push(line);
-            if (chunk.length >= 7) { chunks.push(chunk); chunk = []; }
+        pptx.subject = "Presentation created by BZU AI Assistant";
+        pptx.theme = { headFontFace: "Aptos Display", bodyFontFace: "Aptos", lang: "en-US" };
+        pptx.defineSlideMaster({
+            title: "BZU_CONTENT",
+            background: { color: "F7F9FC" },
+            objects: [
+                { rect: { x: 0, y: 0, w: 13.333, h: 0.09, line: { color: "2563EB", transparency: 100 }, fill: { color: "2563EB" } } },
+                { line: { x: 0.72, y: 6.93, w: 11.9, h: 0, line: { color: "DCE4F0", width: 0.8 } } },
+                { text: { text: "BZU AI  ·  VIRTUAL ASSISTANT", options: { x: 0.75, y: 7.02, w: 5.2, h: 0.18, fontFace: "Aptos", fontSize: 8, charSpacing: 1.1, color: "64748B", margin: 0 } } }
+            ]
+        });
+        const slides = parsePresentationSlides(text);
+        for (const [index, slideContent] of slides.entries()) {
+            const slide = index === 0 ? pptx.addSlide() : pptx.addSlide("BZU_CONTENT");
+            if (index === 0) {
+                slide.background = { color: "10234D" };
+                slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.18, h: 7.5, line: { color: "3B82F6", transparency: 100 }, fill: { color: "3B82F6" } });
+                slide.addText("BZU AI  ·  PRESENTATION", { x: 0.95, y: 1.45, w: 7, h: 0.3, fontFace: "Aptos", fontSize: 11, bold: true, charSpacing: 2, color: "93C5FD", margin: 0 });
+                slide.addText(slideContent.title, { x: 0.9, y: 2.05, w: 11.3, h: 1.55, fontFace: "Aptos Display", fontSize: 34, bold: true, color: "FFFFFF", valign: "mid", fit: "shrink", margin: 0 });
+                if (slideContent.body.length) {
+                    slide.addText(slideContent.body.slice(0, 2).join("\n"), { x: 0.95, y: 3.95, w: 10.6, h: 1.3, fontFace: "Aptos", fontSize: 19, color: "D9E5FA", valign: "top", fit: "shrink", margin: 0 });
+                }
+                slide.addShape(pptx.ShapeType.line, { x: 0.95, y: 5.62, w: 2.15, h: 0, line: { color: "60A5FA", width: 3 } });
+                slide.addText("BAHAUDDIN ZAKARIYA UNIVERSITY", { x: 0.95, y: 6.0, w: 6.4, h: 0.25, fontFace: "Aptos", fontSize: 9, charSpacing: 1.2, color: "B7C7E2", margin: 0 });
+                slide.addText("01", { x: 11.8, y: 6.75, w: 0.55, h: 0.28, fontFace: "Aptos", fontSize: 10, color: "B7C7E2", align: "right", margin: 0 });
+                continue;
+            }
+
+            slide.addText(`KEY IDEAS  /  ${String(index).padStart(2, "0")}`, { x: 0.78, y: 0.48, w: 5.5, h: 0.22, fontFace: "Aptos", fontSize: 9, bold: true, charSpacing: 1.5, color: "2563EB", margin: 0 });
+            slide.addText(slideContent.title, { x: 0.75, y: 0.82, w: 11.7, h: 0.65, fontFace: "Aptos Display", fontSize: 25, bold: true, color: "15233B", fit: "shrink", margin: 0 });
+            slide.addShape(pptx.ShapeType.line, { x: 0.76, y: 1.58, w: 1.05, h: 0, line: { color: "3B82F6", width: 2.5 } });
+
+            const bodyItems = slideContent.body.length ? slideContent.body : ["No supporting details were provided for this slide."];
+            const fontSize = bodyItems.length > 5 ? 14 : 17;
+            const availableBodyHeight = 4.72;
+            const gap = bodyItems.length > 1 ? 0.14 : 0;
+            const rowHeight = Math.max(0.42, Math.min(1.05, (availableBodyHeight - gap * (bodyItems.length - 1)) / bodyItems.length));
+            let y = 1.88;
+            for (const item of bodyItems) {
+                const height = rowHeight;
+                slide.addShape(pptx.ShapeType.ellipse, { x: 0.85, y: y + 0.11, w: 0.1, h: 0.1, line: { color: "3B82F6", transparency: 100 }, fill: { color: "3B82F6" } });
+                slide.addText(item, { x: 1.15, y, w: 11.25, h: height, fontFace: "Aptos", fontSize, color: "25324A", valign: "mid", fit: "shrink", margin: 0.02 });
+                y += height + gap;
+            }
+            slide.addText(String(index + 1).padStart(2, "0"), { x: 12.0, y: 7.0, w: 0.5, h: 0.2, fontFace: "Aptos", fontSize: 9, color: "64748B", align: "right", margin: 0 });
         }
-        if (chunk.length) chunks.push(chunk);
-        for (const [index, slideLines] of chunks.entries()) {
-            const slide = pptx.addSlide();
-            const title = (slideLines[0] || "Generated presentation").replace(/^#{1,6}\s+/, "").replace(/\*\*/g, "");
-            slide.background = { color: "F8FAFC" };
-            slide.addText(title, { x: 0.6, y: 0.45, w: 12.1, h: 0.65, fontFace: "Aptos Display", fontSize: 26, bold: true, color: "1D4ED8", margin: 0 });
-            const body = slideLines.slice(1).map(line => line.replace(/^[-*•]\s*/, "• ").replace(/\*\*/g, "")).join("\n");
-            if (body) slide.addText(body, { x: 0.8, y: 1.4, w: 11.7, h: 5.2, fontFace: "Aptos", fontSize: 18, color: "1E293B", breakLine: false, valign: "top", paraSpaceAfterPt: 12, margin: 0.05 });
-            slide.addText(String(index + 1), { x: 12.1, y: 7.05, w: 0.5, h: 0.2, fontSize: 9, color: "64748B", align: "right" });
-        }
-        if (!chunks.length) {
-            const slide = pptx.addSlide();
-            slide.addText("Generated presentation", { x: 0.6, y: 0.45, w: 12, h: 0.7, fontSize: 26, bold: true, color: "1D4ED8" });
-            slide.addText(text, { x: 0.8, y: 1.5, w: 11.7, h: 5, fontSize: 18, color: "1E293B", valign: "top" });
-        }
+        if (!slides.length) throw new Error("The presentation has no slide content. Please try the request again with a topic.");
         return Buffer.from(await pptx.write({ outputType: "nodebuffer" }));
     }
     if (format === "json") {
@@ -1789,7 +1871,7 @@ When creating files, include the requested content in the file itself. Prefer a 
             docx: "Return a complete, polished document with a clear title, appropriate headings, readable paragraphs, and useful examples when suitable. Return textual content only. Do not return Base64, ZIP data, or binary bytes; the application creates the DOCX file.",
             csv: "Return valid CSV only, with a header row.",
             xlsx: "Return a clean comma-separated table with a header row so it can be placed into a spreadsheet.",
-            pptx: "Create a complete, presentation-ready slide sequence. Use one Markdown heading per slide, concise bullets, a logical opening and conclusion, and enough substantive detail for the requested audience; avoid overloading slides.",
+            pptx: "Create a complete, presentation-ready PowerPoint deck based on the user's topic. By default create 8 slides unless the user requests a different number. Return slide content only, with no introduction or closing. Use this exact structure for every slide: a Markdown heading like '# Slide 1: Title', then for slide 1 one short subtitle only; for each following slide include 3–5 concise, substantive bullets. Put a line containing exactly '---' between every slide. Make the middle slides follow a logical progression of concepts, explanations, examples, or evidence; end with a useful conclusion or key takeaways. Use readable wording, avoid repeated filler and invented citations, and keep each slide focused. If the user has not given a presentation topic, ask one short clarifying question instead of creating a generic deck.",
             json: "Return valid JSON only.",
             html: "Return one complete, valid, self-contained HTML document only, with responsive CSS and working JavaScript inline as appropriate. Make it polished, accessible, and usable on mobile and desktop. Do not leave placeholder sections or refer to files that you did not provide.",
             js: "Return complete, runnable JavaScript source code only. Include required input validation and error handling; do not use placeholders or omit requested functions.",
@@ -2100,6 +2182,8 @@ app.post(
             if (!format) {
                 if (req.file.mimetype === "application/pdf") format = "pdf";
                 else if (req.file.mimetype === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") format = "docx";
+                else if (req.file.mimetype === "application/vnd.openxmlformats-officedocument.presentationml.presentation") format = "pptx";
+                else if (req.file.mimetype === "application/vnd.ms-powerpoint") format = "ppt";
                 else if (req.file.mimetype === "image/png") format = "png";
                 else if (req.file.mimetype === "image/jpeg") format = "jpg";
                 else if (req.file.mimetype === "image/webp") format = "webp";
@@ -2183,6 +2267,22 @@ app.post(
                     result.value || "";
             }
 
+            else if (
+                ["ppt", "pptx"].includes(format) ||
+                [
+                    "application/vnd.ms-powerpoint",
+                    "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                ].includes(req.file.mimetype)
+            ) {
+                setUploadProgress(progressId, req.session.userId, "Reading presentation slides and speaker notes…");
+                const presentation = await docstream.parseOffice(req.file.path, {
+                    ignoreNotes: false,
+                    newlineDelimiter: "\n"
+                });
+                documentText = String(presentation?.toText?.() || "").trim();
+                console.log(`PowerPoint parsed: ${path.basename(originalName)}, ${documentText.length} text characters`);
+            }
+
             else if (format === "xlsx") {
                 const workbook = new ExcelJS.Workbook();
                 await workbook.xlsx.load(fs.readFileSync(req.file.path));
@@ -2241,7 +2341,7 @@ app.post(
                     success: false,
 
                     reply:
-                        "Supported uploads are PDF, DOCX, XLSX, TXT, CSV, HTML, code/text files, and PNG, JPG, or WebP images."
+                        "Supported uploads are PDF, DOCX, PPT, PPTX, XLSX, TXT, CSV, HTML, code/text files, and PNG, JPG, or WebP images."
                 });
             }
 
@@ -2693,6 +2793,10 @@ app.listen(
 
         console.log(
             "📘 DOCX Upload : Enabled"
+        );
+
+        console.log(
+            "📊 PPT/PPTX Upload : Enabled"
         );
 
         console.log(
