@@ -54,6 +54,7 @@ const PDFDocument = require("pdfkit");
 const { Document, Packer, Paragraph, HeadingLevel } = require("docx");
 const ExcelJS = require("exceljs");
 const PptxGenJS = require("pptxgenjs");
+const JSZip = require("jszip");
 
 const fs = require("fs");
 const path = require("path");
@@ -381,14 +382,20 @@ function parsePresentationSlides(text) {
             .replace(/^(?:slide\s*)?\d+\s*[:.)–—-]\s*/i, "")
             .replace(/\*\*/g, "")
             .trim() || `Slide ${index + 1}`;
-        const body = lines.map(line => line
+        const metadata = {
+            layout: lines.find(line => /^layout\s*:/i.test(line))?.replace(/^layout\s*:\s*/i, "").trim().toLowerCase() || "cards",
+            subtitle: lines.find(line => /^subtitle\s*:/i.test(line))?.replace(/^subtitle\s*:\s*/i, "").trim() || "",
+            visual: lines.find(line => /^visual\s*:/i.test(line))?.replace(/^visual\s*:\s*/i, "").trim() || "",
+            notes: lines.find(line => /^(?:speaker\s+notes|presenter\s+notes)\s*:/i.test(line))?.replace(/^(?:speaker\s+notes|presenter\s+notes)\s*:\s*/i, "").trim() || ""
+        };
+        const body = lines.filter(line => !/^(?:layout|subtitle|visual|speaker\s+notes|presenter\s+notes)\s*:/i.test(line)).map(line => line
             .replace(/^[-*•]\s+/, "")
             .replace(/^\d+[.)]\s+/, "")
             .replace(/\*\*(.*?)\*\*/g, "$1")
             .replace(/`([^`]+)`/g, "$1")
             .trim()
         ).filter(Boolean);
-        return { title, body };
+        return { title, body, ...metadata };
     });
 
     // Recover gracefully if the model returned ordinary paragraphs instead of
@@ -449,55 +456,149 @@ async function buildGeneratedFile(format, text) {
         }
         const pptx = new PptxGenJS();
         pptx.layout = "LAYOUT_WIDE";
+        pptx.title = "Presentation created by BZU AI Assistant";
         pptx.author = "BZU AI Assistant";
         pptx.subject = "Presentation created by BZU AI Assistant";
+        pptx.company = "Bahauddin Zakariya University";
         pptx.theme = { headFontFace: "Aptos Display", bodyFontFace: "Aptos", lang: "en-US" };
         pptx.defineSlideMaster({
             title: "BZU_CONTENT",
             background: { color: "F7F9FC" },
             objects: [
-                { rect: { x: 0, y: 0, w: 13.333, h: 0.09, line: { color: "2563EB", transparency: 100 }, fill: { color: "2563EB" } } },
-                { line: { x: 0.72, y: 6.93, w: 11.9, h: 0, line: { color: "DCE4F0", width: 0.8 } } },
-                { text: { text: "BZU AI  ·  VIRTUAL ASSISTANT", options: { x: 0.75, y: 7.02, w: 5.2, h: 0.18, fontFace: "Aptos", fontSize: 8, charSpacing: 1.1, color: "64748B", margin: 0 } } }
+                { rect: { x: 0, y: 0, w: 0.11, h: 7.5, line: { color: "2563EB", transparency: 100 }, fill: { color: "2563EB" } } },
+                { line: { x: 0.74, y: 6.95, w: 11.85, h: 0, line: { color: "DCE4F0", width: 0.8 } } },
+                { text: { text: "BZU AI  ·  VIRTUAL ASSISTANT", options: { x: 0.78, y: 7.06, w: 5.4, h: 0.18, fontFace: "Aptos", fontSize: 8, charSpacing: 1.1, color: "64748B", margin: 0 } } }
             ]
         });
         const slides = parsePresentationSlides(text);
+        const palette = ["2563EB", "0F766E", "B45309", "7C3AED", "BE123C", "0891B2"];
+        const addCard = (slide, x, y, w, h, textValue, number, color, fontSize = 15) => {
+            slide.addShape(pptx.ShapeType.roundRect, {
+                x, y, w, h, rectRadius: 0.12,
+                line: { color: "E2E8F0", width: 0.8 },
+                fill: { color: "FFFFFF" },
+                shadow: { type: "outer", color: "94A3B8", blur: 1.5, angle: 45, distance: 1, opacity: 0.10 }
+            });
+            slide.addShape(pptx.ShapeType.roundRect, {
+                x: x + 0.16, y: y + 0.18, w: 0.48, h: 0.38,
+                line: { color, transparency: 100 }, fill: { color }
+            });
+            slide.addText(String(number).padStart(2, "0"), {
+                x: x + 0.16, y: y + 0.26, w: 0.48, h: 0.15, fontFace: "Aptos", fontSize: 9,
+                bold: true, color: "FFFFFF", align: "center", margin: 0
+            });
+            slide.addText(textValue, {
+                x: x + 0.2, y: y + 0.73, w: w - 0.4, h: h - 0.9,
+                fontFace: "Aptos", fontSize, color: "25324A", valign: "top", fit: "shrink",
+                breakLine: false, margin: 0.02, paraSpaceAfterPt: 5
+            });
+        };
         for (const [index, slideContent] of slides.entries()) {
             const slide = index === 0 ? pptx.addSlide() : pptx.addSlide("BZU_CONTENT");
             if (index === 0) {
                 slide.background = { color: "10234D" };
-                slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.18, h: 7.5, line: { color: "3B82F6", transparency: 100 }, fill: { color: "3B82F6" } });
-                slide.addText("BZU AI  ·  PRESENTATION", { x: 0.95, y: 1.45, w: 7, h: 0.3, fontFace: "Aptos", fontSize: 11, bold: true, charSpacing: 2, color: "93C5FD", margin: 0 });
-                slide.addText(slideContent.title, { x: 0.9, y: 2.05, w: 11.3, h: 1.55, fontFace: "Aptos Display", fontSize: 34, bold: true, color: "FFFFFF", valign: "mid", fit: "shrink", margin: 0 });
-                if (slideContent.body.length) {
-                    slide.addText(slideContent.body.slice(0, 2).join("\n"), { x: 0.95, y: 3.95, w: 10.6, h: 1.3, fontFace: "Aptos", fontSize: 19, color: "D9E5FA", valign: "top", fit: "shrink", margin: 0 });
+                slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.16, h: 7.5, line: { color: "60A5FA", transparency: 100 }, fill: { color: "60A5FA" } });
+                slide.addShape(pptx.ShapeType.ellipse, { x: 9.55, y: -1.45, w: 5.2, h: 5.2, line: { color: "1D4ED8", transparency: 100 }, fill: { color: "1D4ED8", transparency: 35 } });
+                slide.addShape(pptx.ShapeType.ellipse, { x: 10.45, y: 3.35, w: 3.25, h: 3.25, line: { color: "0F766E", transparency: 100 }, fill: { color: "0F766E", transparency: 28 } });
+                slide.addText("BZU AI  /  PRESENTATION", { x: 0.95, y: 1.22, w: 6.5, h: 0.25, fontFace: "Aptos", fontSize: 10, bold: true, charSpacing: 2.2, color: "93C5FD", margin: 0 });
+                slide.addShape(pptx.ShapeType.line, { x: 0.95, y: 1.75, w: 1.1, h: 0, line: { color: "38BDF8", width: 3 } });
+                slide.addText(slideContent.title, { x: 0.92, y: 2.12, w: 10.6, h: 1.62, fontFace: "Aptos Display", fontSize: 35, bold: true, color: "FFFFFF", valign: "mid", fit: "shrink", margin: 0 });
+                if (slideContent.subtitle || slideContent.body.length) {
+                    slide.addText(slideContent.subtitle || slideContent.body[0], { x: 0.96, y: 4.08, w: 8.9, h: 0.95, fontFace: "Aptos", fontSize: 19, color: "D9E5FA", valign: "top", fit: "shrink", margin: 0 });
                 }
-                slide.addShape(pptx.ShapeType.line, { x: 0.95, y: 5.62, w: 2.15, h: 0, line: { color: "60A5FA", width: 3 } });
-                slide.addText("BAHAUDDIN ZAKARIYA UNIVERSITY", { x: 0.95, y: 6.0, w: 6.4, h: 0.25, fontFace: "Aptos", fontSize: 9, charSpacing: 1.2, color: "B7C7E2", margin: 0 });
-                slide.addText("01", { x: 11.8, y: 6.75, w: 0.55, h: 0.28, fontFace: "Aptos", fontSize: 10, color: "B7C7E2", align: "right", margin: 0 });
-                continue;
-            }
+                slide.addText("BAHAUDDIN ZAKARIYA UNIVERSITY", { x: 0.96, y: 6.36, w: 6.5, h: 0.22, fontFace: "Aptos", fontSize: 9, bold: true, charSpacing: 1.5, color: "B7C7E2", margin: 0 });
+            } else {
+                const sectionLabel = slideContent.layout === "process" ? "A PRACTICAL FRAMEWORK"
+                    : slideContent.layout === "timeline" ? "HOW IT EVOLVED"
+                        : slideContent.layout === "comparison" ? "SIDE-BY-SIDE ANALYSIS"
+                            : slideContent.layout === "takeaways" ? "WHAT TO REMEMBER"
+                                : "KEY IDEAS";
+                slide.addText(`${sectionLabel}  /  ${String(index).padStart(2, "0")}`, { x: 0.82, y: 0.48, w: 7.8, h: 0.22, fontFace: "Aptos", fontSize: 9, bold: true, charSpacing: 1.6, color: "2563EB", margin: 0 });
+                slide.addText(slideContent.title, { x: 0.79, y: 0.86, w: 11.7, h: 0.72, fontFace: "Aptos Display", fontSize: 26, bold: true, color: "15233B", fit: "shrink", margin: 0 });
 
-            slide.addText(`KEY IDEAS  /  ${String(index).padStart(2, "0")}`, { x: 0.78, y: 0.48, w: 5.5, h: 0.22, fontFace: "Aptos", fontSize: 9, bold: true, charSpacing: 1.5, color: "2563EB", margin: 0 });
-            slide.addText(slideContent.title, { x: 0.75, y: 0.82, w: 11.7, h: 0.65, fontFace: "Aptos Display", fontSize: 25, bold: true, color: "15233B", fit: "shrink", margin: 0 });
-            slide.addShape(pptx.ShapeType.line, { x: 0.76, y: 1.58, w: 1.05, h: 0, line: { color: "3B82F6", width: 2.5 } });
-
-            const bodyItems = slideContent.body.length ? slideContent.body : ["No supporting details were provided for this slide."];
-            const fontSize = bodyItems.length > 5 ? 14 : 17;
-            const availableBodyHeight = 4.72;
-            const gap = bodyItems.length > 1 ? 0.14 : 0;
-            const rowHeight = Math.max(0.42, Math.min(1.05, (availableBodyHeight - gap * (bodyItems.length - 1)) / bodyItems.length));
-            let y = 1.88;
-            for (const item of bodyItems) {
-                const height = rowHeight;
-                slide.addShape(pptx.ShapeType.ellipse, { x: 0.85, y: y + 0.11, w: 0.1, h: 0.1, line: { color: "3B82F6", transparency: 100 }, fill: { color: "3B82F6" } });
-                slide.addText(item, { x: 1.15, y, w: 11.25, h: height, fontFace: "Aptos", fontSize, color: "25324A", valign: "mid", fit: "shrink", margin: 0.02 });
-                y += height + gap;
+                const bodyItems = slideContent.body.length ? slideContent.body : ["Key details are explained in the speaker notes."];
+                const layout = ["process", "timeline", "comparison", "takeaways"].includes(slideContent.layout) ? slideContent.layout : "cards";
+                if (layout === "process" || layout === "timeline") {
+                    const items = bodyItems.slice(0, 5);
+                    const gap = 0.18;
+                    const cardW = (11.65 - gap * (items.length - 1)) / items.length;
+                    const cardY = 2.35;
+                    items.forEach((item, itemIndex) => {
+                        const x = 0.82 + itemIndex * (cardW + gap);
+                        const color = palette[itemIndex % palette.length];
+                        if (itemIndex < items.length - 1) {
+                            slide.addShape(pptx.ShapeType.line, { x: x + cardW - 0.01, y: cardY + 0.31, w: gap + 0.02, h: 0, line: { color: "CBD5E1", width: 2, endArrowType: "triangle" } });
+                        }
+                        slide.addShape(pptx.ShapeType.roundRect, { x, y: cardY + 0.58, w: cardW, h: 2.36, line: { color: "E2E8F0", width: 0.8 }, fill: { color: "FFFFFF" }, shadow: { type: "outer", color: "94A3B8", blur: 1.5, angle: 45, distance: 1, opacity: 0.10 } });
+                        slide.addShape(pptx.ShapeType.ellipse, { x: x + cardW / 2 - 0.28, y: cardY, w: 0.56, h: 0.56, line: { color, transparency: 100 }, fill: { color } });
+                        slide.addText(String(itemIndex + 1).padStart(2, "0"), { x: x + cardW / 2 - 0.28, y: cardY + 0.17, w: 0.56, h: 0.17, fontFace: "Aptos", fontSize: 10, bold: true, color: "FFFFFF", align: "center", margin: 0 });
+                        slide.addText(item, { x: x + 0.15, y: cardY + 0.82, w: cardW - 0.3, h: 1.86, fontFace: "Aptos", fontSize: 14, color: "25324A", valign: "top", fit: "shrink", margin: 0.02 });
+                    });
+                } else if (layout === "comparison") {
+                    const leftItems = bodyItems.filter(item => /^A\s*:/i.test(item)).map(item => item.replace(/^A\s*:\s*/i, ""));
+                    const rightItems = bodyItems.filter(item => /^B\s*:/i.test(item)).map(item => item.replace(/^B\s*:\s*/i, ""));
+                    const half = Math.ceil(bodyItems.length / 2);
+                    const columns = [leftItems.length || rightItems.length ? leftItems : bodyItems.slice(0, half), rightItems.length ? rightItems : bodyItems.slice(half)];
+                    const labels = ["PERSPECTIVE A", "PERSPECTIVE B"];
+                    columns.forEach((items, colIndex) => {
+                        const x = 0.84 + colIndex * 5.92;
+                        const color = colIndex ? "0F766E" : "2563EB";
+                        slide.addShape(pptx.ShapeType.roundRect, { x, y: 1.95, w: 5.55, h: 4.55, line: { color: "E2E8F0", width: 0.9 }, fill: { color: "FFFFFF" }, shadow: { type: "outer", color: "94A3B8", blur: 1.5, angle: 45, distance: 1, opacity: 0.10 } });
+                        slide.addShape(pptx.ShapeType.rect, { x, y: 1.95, w: 5.55, h: 0.12, line: { color, transparency: 100 }, fill: { color } });
+                        slide.addText(labels[colIndex], { x: x + 0.28, y: 2.25, w: 4.95, h: 0.3, fontFace: "Aptos", fontSize: 10, bold: true, charSpacing: 1.5, color, margin: 0 });
+                        slide.addText(items.join("\n\n"), { x: x + 0.3, y: 2.8, w: 4.95, h: 3.25, fontFace: "Aptos", fontSize: 16, color: "25324A", valign: "top", fit: "shrink", breakLine: false, margin: 0.02, paraSpaceAfterPt: 10 });
+                    });
+                } else if (layout === "takeaways") {
+                    const takeaway = bodyItems[0] || "";
+                    slide.addShape(pptx.ShapeType.roundRect, { x: 0.85, y: 2.0, w: 4.2, h: 4.4, line: { color: "1D4ED8", transparency: 100 }, fill: { color: "1E3A8A" } });
+                    slide.addText("THE CENTRAL IDEA", { x: 1.18, y: 2.36, w: 3.4, h: 0.24, fontFace: "Aptos", fontSize: 9, bold: true, charSpacing: 1.5, color: "BFDBFE", margin: 0 });
+                    slide.addText(takeaway, { x: 1.18, y: 2.9, w: 3.45, h: 2.9, fontFace: "Aptos Display", fontSize: 22, bold: true, color: "FFFFFF", valign: "mid", fit: "shrink", margin: 0.02 });
+                    bodyItems.slice(1, 5).forEach((item, itemIndex) => {
+                        const y = 2.08 + itemIndex * 1.06;
+                        slide.addShape(pptx.ShapeType.ellipse, { x: 5.52, y: y + 0.06, w: 0.18, h: 0.18, line: { color: "2563EB", transparency: 100 }, fill: { color: "2563EB" } });
+                        slide.addText(item, { x: 5.9, y, w: 6.2, h: 0.83, fontFace: "Aptos", fontSize: 16, color: "25324A", valign: "mid", fit: "shrink", margin: 0.02 });
+                    });
+                } else {
+                    const items = bodyItems.slice(0, 6);
+                    const gapX = 0.2;
+                    const gapY = 0.18;
+                    const cardW = (11.65 - gapX) / 2;
+                    const rows = Math.ceil(items.length / 2);
+                    const cardH = Math.min(2.0, (4.75 - gapY * (rows - 1)) / rows);
+                    items.forEach((item, itemIndex) => {
+                        const col = itemIndex % 2;
+                        const row = Math.floor(itemIndex / 2);
+                        const x = 0.82 + col * (cardW + gapX);
+                        const y = 1.95 + row * (cardH + gapY);
+                        addCard(slide, x, y, cardW, cardH, item, itemIndex + 1, palette[itemIndex % palette.length], items.length > 4 ? 13 : 15);
+                    });
+                }
             }
-            slide.addText(String(index + 1).padStart(2, "0"), { x: 12.0, y: 7.0, w: 0.5, h: 0.2, fontFace: "Aptos", fontSize: 9, color: "64748B", align: "right", margin: 0 });
+            if (slideContent.notes || slideContent.visual) {
+                slide.addNotes([slideContent.notes, slideContent.visual ? `Suggested visual: ${slideContent.visual}` : ""].filter(Boolean).join("\n\n"));
+            }
+            slide.addText(`${String(index + 1).padStart(2, "0")}  /  ${String(slides.length).padStart(2, "0")}`, { x: 11.35, y: 7.06, w: 1.15, h: 0.18, fontFace: "Aptos", fontSize: 8, color: "64748B", align: "right", margin: 0 });
         }
         if (!slides.length) throw new Error("The presentation has no slide content. Please try the request again with a topic.");
-        return Buffer.from(await pptx.write({ outputType: "nodebuffer" }));
+        const presentationBuffer = Buffer.from(await pptx.write({ outputType: "nodebuffer" }));
+        const archive = await JSZip.loadAsync(presentationBuffer);
+        const slideFiles = Object.keys(archive.files).filter(name => /^ppt\/slides\/slide\d+\.xml$/.test(name));
+        await Promise.all(slideFiles.map(async name => {
+            let xml = await archive.file(name).async("string");
+            if (xml.includes("<p:transition")) return;
+            const transitionXml = '<p:transition spd="med" advClick="1"><p:fade/></p:transition>';
+            if (/<p:clrMapOvr\b[^>]*>[\s\S]*?<\/p:clrMapOvr>/.test(xml)) {
+                xml = xml.replace(/(<p:clrMapOvr\b[^>]*>[\s\S]*?<\/p:clrMapOvr>)/, `$1${transitionXml}`);
+            } else if (/<p:clrMapOvr\b[^>]*\/>/.test(xml)) {
+                xml = xml.replace(/(<p:clrMapOvr\b[^>]*\/>)/, `$1${transitionXml}`);
+            } else if (/<p:timing\b/.test(xml)) {
+                xml = xml.replace(/(<p:timing\b)/, `${transitionXml}$1`);
+            } else {
+                xml = xml.replace("</p:sld>", `${transitionXml}</p:sld>`);
+            }
+            archive.file(name, xml);
+        }));
+        return Buffer.from(await archive.generateAsync({ type: "nodebuffer", compression: "DEFLATE" }));
     }
     if (format === "json") {
         const cleaned = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
@@ -2032,7 +2133,7 @@ When creating files, include the requested content in the file itself. Prefer a 
             docx: "Return a complete, polished document with a clear title, appropriate headings, readable paragraphs, and useful examples when suitable. Return textual content only. Do not return Base64, ZIP data, or binary bytes; the application creates the DOCX file.",
             csv: "Return valid CSV only, with a header row.",
             xlsx: "Return a clean comma-separated table with a header row so it can be placed into a spreadsheet.",
-            pptx: "Create a complete, presentation-ready PowerPoint deck based on the user's topic. By default create 8 slides unless the user requests a different number. Return slide content only, with no introduction or closing. Use this exact structure for every slide: a Markdown heading like '# Slide 1: Title', then for slide 1 one short subtitle only; for each following slide include 3–5 concise, substantive bullets. Put a line containing exactly '---' between every slide. Make the middle slides follow a logical progression of concepts, explanations, examples, or evidence; end with a useful conclusion or key takeaways. Use readable wording, avoid repeated filler and invented citations, and keep each slide focused. If the user has not given a presentation topic, ask one short clarifying question instead of creating a generic deck.",
+            pptx: "Create a polished, useful PowerPoint presentation based on the user's requested topic and any supplied source material. Use 8 slides by default, or the requested count. Infer a suitable audience and purpose from the request; if a topic is missing, ask one concise question. Build a coherent story: engaging title and promise, context or problem, core concepts, a clear process or comparison when relevant, a concrete worked example or case, implications or trade-offs, and actionable takeaways. Avoid generic filler, repeated ideas, unsupported statistics, invented citations, and vague claims. Explain technical terms plainly. Keep each slide focused on one key message, with 3–5 concise bullets (prefer one sentence and under 20 words each). Use specific examples and meaningful analysis instead of merely listing definitions. Return only slide content in this format, separated by a line containing exactly '---': '# Slide 1: Title', 'Subtitle: one compelling sentence', 'Layout: hero' for the first slide; for later slides use 'Layout: cards', 'Layout: process', 'Layout: timeline', 'Layout: comparison', or 'Layout: takeaways' as appropriate; then bullet lines. For a comparison slide, prefix each bullet with 'A:' or 'B:' and keep both sides balanced. Add one concise 'Visual: ...' line suggesting a diagram, timeline, or illustration that can be represented with native PowerPoint shapes; never suggest an image that the app cannot provide. Add a useful 'Speaker notes: ...' paragraph (2–4 sentences) with explanation or presentation guidance; the audience-facing slide should remain concise. Do not include code fences, an introduction, or a closing message outside the slides.",
             json: "Return valid JSON only.",
             html: "Return one complete, valid, self-contained HTML document only, with responsive CSS and working JavaScript inline as appropriate. Make it polished, accessible, and usable on mobile and desktop. Do not leave placeholder sections or refer to files that you did not provide.",
             js: "Return complete, runnable JavaScript source code only. Include required input validation and error handling; do not use placeholders or omit requested functions.",
