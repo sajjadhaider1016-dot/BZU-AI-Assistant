@@ -70,7 +70,7 @@ app.use(express.urlencoded({ extended: true }));
 // ======================================================
 
 const uploadsDirectory = path.join(__dirname, "uploads");
-const dataDirectory = path.join(__dirname, "data");
+const dataDirectory = process.env.RAILWAY_VOLUME_MOUNT_PATH || path.join(__dirname, "data");
 
 if (!fs.existsSync(uploadsDirectory)) {
     fs.mkdirSync(uploadsDirectory, { recursive: true });
@@ -78,6 +78,11 @@ if (!fs.existsSync(uploadsDirectory)) {
 
 if (!fs.existsSync(dataDirectory)) {
     fs.mkdirSync(dataDirectory, { recursive: true });
+}
+
+if ((process.env.RAILWAY_PROJECT_ID || process.env.RAILWAY_ENVIRONMENT_NAME)
+    && !process.env.RAILWAY_VOLUME_MOUNT_PATH) {
+    console.warn("PERSISTENCE WARNING: No Railway Volume is attached. User accounts and app files may be lost when this deployment is replaced. Attach a Volume at /app/data.");
 }
 // ======================================================
 // MIDDLEWARE
