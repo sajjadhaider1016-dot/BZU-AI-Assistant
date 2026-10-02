@@ -42,6 +42,14 @@ function normalize(text) {
         .trim();
 }
 
+function prospectusYear(text) {
+    const match = String(text || "").match(/\bprospectus(?:\s+year)?\s+(20\d{2})\b/i);
+    return match ? Number(match[1]) : 0;
+}
+
+const latestProspectusYear = knowledge.reduce((latest, item) =>
+    Math.max(latest, prospectusYear(`${item?.title || ""} ${item?.text || item?.content || ""}`)), 0);
+
 // ======================================================
 // STOP WORDS
 // ======================================================
@@ -214,6 +222,9 @@ function searchKnowledge(query) {
         return [];
     }
 
+    const requestedYearMatch = normalizedQuery.match(/\b(20\d{2})\b/);
+    const requestedYear = requestedYearMatch ? Number(requestedYearMatch[1]) : 0;
+
     // ==================================================
     // QUESTION TYPES
     // ==================================================
@@ -321,6 +332,7 @@ function searchKnowledge(query) {
         );
 
         const combined = `${title} ${text}`;
+        const sourceYear = prospectusYear(`${item.title || item.name || ""} ${item.text || item.content || item.description || ""}`);
 
         let score = 0;
 
@@ -338,6 +350,16 @@ function searchKnowledge(query) {
 
         if (text.includes(normalizedQuery)) {
             score += 20000;
+        }
+
+        // Prefer the newest prospectus by default, but honor an explicitly
+        // requested historical year. The 2026 source receives real page text.
+        if (sourceYear) {
+            if (requestedYear) {
+                score += sourceYear === requestedYear ? 80000 : -20000;
+            } else {
+                score += Math.max(-25000, 25000 - ((latestProspectusYear - sourceYear) * 25000));
+            }
         }
 
         // ==================================================
