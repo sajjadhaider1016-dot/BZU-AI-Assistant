@@ -277,7 +277,10 @@ function getCurrentTime() {
 
 // ================= TYPING =================
 
-function showTyping() {
+function showTyping(statusText = "Working on it") {
+
+    const status = typingIndicator.querySelector(".typing-status-text");
+    if (status) status.textContent = statusText;
 
     typingIndicator.classList.remove("hidden");
 
@@ -438,6 +441,13 @@ function addAIMessage(text, extra = {}) {
 
     createMessage("ai", text, extra);
 
+}
+
+function updateTypingStatus(statusText) {
+    const status = typingIndicator.querySelector(".typing-status-text");
+    if (status && !typingIndicator.classList.contains("hidden")) {
+        status.textContent = statusText;
+    }
 }
 
 function imagePromptFromMessage(message) {
@@ -845,18 +855,20 @@ async function sendMessage() {
 
     isTyping = true;
 
-    showTyping();
+    showTyping(fileToUpload ? "Uploading your file…" : "Thinking…");
 
     try {
 
         let uploadResult = null;
         if (fileToUpload) {
+            updateTypingStatus("Reading your file…");
             const formData = new FormData();
             formData.append("file", fileToUpload);
             formData.append("instruction", text);
             if (text && (isUploadEditInstruction(text) || fileRequest)) formData.append("skipAnalysis", "true");
 
             for (let passwordAttempt = 0; passwordAttempt < 3; passwordAttempt++) {
+                updateTypingStatus("Reading and analyzing your file…");
                 const uploadResponse = await fetch("/upload", { method: "POST", body: formData });
                 const uploadBody = await uploadResponse.text();
                 try { uploadResult = JSON.parse(uploadBody); }
@@ -877,6 +889,7 @@ async function sendMessage() {
             }
 
             const attachment = uploadResult.attachment || {};
+            updateTypingStatus("File ready. Preparing your response…");
             latestUploadedFile = {
                 role: "user",
                 text: text || `Uploaded: ${attachment.name || fileToUpload.name}`,
@@ -903,6 +916,7 @@ async function sendMessage() {
             (fileToUpload || (fileRequest.usePrevious && lastAttachedMedia)));
 
         if (shouldConvertUpload) {
+            updateTypingStatus("Preparing your download…");
             const fileDownloads = [];
             for (const format of fileRequest.formats) {
                 const isGeneratedImage = !fileToUpload && lastAttachedMedia?.role === "assistant";
@@ -949,6 +963,7 @@ async function sendMessage() {
         }
 
         if (asksToEditUpload) {
+            updateTypingStatus("Editing your file…");
             const editResponse = await fetch("/api/edit-upload", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -978,6 +993,7 @@ async function sendMessage() {
             return;
         }
 
+        updateTypingStatus(fileToUpload ? "Analyzing the uploaded file…" : "Thinking…");
         const response = await fetch("/chat", {
 
             method: "POST",
@@ -1027,6 +1043,7 @@ async function sendMessage() {
         let assistantMessage;
         if (fileRequest) {
             try {
+                showTyping("Preparing your requested file…");
                 const contentForFile = fileRequest.usePrevious && previousAssistantReply
                     ? previousAssistantReply
                     : aiReply;
@@ -1034,11 +1051,13 @@ async function sendMessage() {
                 for (const format of fileRequest.formats) {
                     fileDownloads.push(await createGeneratedFile(contentForFile, format, text));
                 }
+                hideTyping();
                 displayedReply = fileDownloads.length > 1
                     ? "Files created as requested."
                     : "File created as requested.";
                 assistantMessage = { role: "assistant", text: displayedReply, fileDownloads };
             } catch (fileError) {
+                hideTyping();
                 displayedReply = fileError.message || "I couldn't create that file. Please try again.";
                 assistantMessage = { role: "assistant", text: displayedReply };
             }
