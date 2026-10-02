@@ -36,9 +36,12 @@ const imageLibraryGrid = document.getElementById("imageLibraryGrid");
 
 const fileInput = document.getElementById("fileInput");
 
+const fileDropOverlay = document.getElementById("fileDropOverlay");
+
 const pendingAttachmentPreview = document.getElementById("pendingAttachmentPreview");
 
 let pendingUploadFile = null;
+let pendingUploadBatchCount = 1;
 
 const voiceBtn = document.getElementById("voiceBtn");
 
@@ -771,6 +774,7 @@ function saveCurrentChat() {
 function loadChat(chat) {
 
     pendingUploadFile = null;
+    pendingUploadBatchCount = 1;
     fileInput.value = "";
     renderPendingAttachment();
 
@@ -831,7 +835,9 @@ function renderPendingAttachment() {
     name.textContent = pendingUploadFile.name;
     const hint = document.createElement("span");
     hint.className = "pending-attachment-hint";
-    hint.textContent = "Add an instruction, then press Send";
+    hint.textContent = pendingUploadBatchCount > 1
+        ? `First of ${pendingUploadBatchCount} files attached. Add an instruction, then press Send.`
+        : "Add an instruction, then press Send";
     details.append(name, hint);
 
     const remove = document.createElement("button");
@@ -842,6 +848,7 @@ function renderPendingAttachment() {
     remove.innerHTML = '<i class="fa-solid fa-xmark" aria-hidden="true"></i>';
     remove.addEventListener("click", () => {
         pendingUploadFile = null;
+        pendingUploadBatchCount = 1;
         fileInput.value = "";
         renderPendingAttachment();
     });
@@ -852,6 +859,12 @@ function renderPendingAttachment() {
 function isUploadEditInstruction(text) {
     return /\b(edit|modify|change|replace|remove|add|retouch|crop|enhance|clean up|rewrite|correct|fix|update|reformat|translate|proofread|redesign|improve|polish)\b/i.test(text) ||
         /\b(make|turn|set)\s+(?:it|this|the|my|the background|background|image|photo|picture|file|document|spreadsheet|page)\b/i.test(text);
+}
+
+function isUploadedDocumentFollowUp(text) {
+    return /\b(book|document|pdf|file|chapter|page|author|according to|based on|from (?:the )?(?:book|document|file|it|this)|in (?:the )?(?:book|document|file|it|this)|uploaded|attached|summari[sz]e|summary|key (?:ideas|points|arguments)|main (?:idea|argument)|explain|analy[sz]e|extract|quote|what does it say|what is discussed|who is mentioned)\b/i.test(String(text || "")) ||
+        /\b(kitab|kitaab|book|pdf|file|chapter|safha|safhay|is mein|is me|iss mein|iss me|is kitab|is kitaab|uploaded|attached|khulasa|mukhtasar|ahm nuqat|markazi khayal|samjhao|tashreeh|parho|parhna|mazmoon|musannif)\b/i.test(String(text || "")) ||
+        /(کتاب|باب|صفحہ|فائل|خلاصہ|اہم نکات|وضاحت|مصنف|تحلیل|الكتاب|الفصل|الصفحة|الملف|ملخص|لخص|اشرح|المؤلف|libro|documento|capítulo|página|resumen|autor|analiza|explica|livre|chapitre|page|résumé|auteur|analyse|explique)/i.test(String(text || ""));
 }
 
 async function sendMessage() {
@@ -996,6 +1009,7 @@ async function sendMessage() {
             if (text) rememberUser(text);
             addUserMessage(latestUploadedFile.text, latestUploadedFile);
             pendingUploadFile = null;
+            pendingUploadBatchCount = 1;
             renderPendingAttachment();
             messageInput.value = "";
             messageInput.style.height = "auto";
@@ -1045,6 +1059,11 @@ async function sendMessage() {
 
         const asksToEditUpload = Boolean(latestUploadedFile && text && isUploadEditInstruction(text));
 
+        const asksAboutUploadedDocument = Boolean(
+            !fileToUpload && !fileRequest && !asksToEditUpload && latestUploadedFile &&
+            !latestUploadedFile.attachmentIsImage && isUploadedDocumentFollowUp(text)
+        );
+
         if (fileToUpload && !asksToEditUpload) {
             hideTyping();
             const uploadReply = uploadResult?.reply || "File uploaded. Tell me what you would like me to do with it.";
@@ -1082,6 +1101,34 @@ async function sendMessage() {
             currentChat.push(editedMessage);
             addAIMessage(editedMessage.text, editedMessage);
             if (voiceMode) speakReply(editedMessage.text);
+            saveCurrentChat();
+            return;
+        }
+
+        if (asksAboutUploadedDocument) {
+            updateTypingStatus("Reading the complete uploaded document…");
+            const progressId = window.crypto?.randomUUID?.()
+                || "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, char => {
+                    const random = Math.random() * 16 | 0;
+                    return (char === "x" ? random : (random & 0x3 | 0x8)).toString(16);
+                });
+            const analysisResponse = await fetch("/api/analyze-upload", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ attachmentId: latestUploadedFile.attachmentId, instruction: text, progressId })
+            });
+            const analysisData = await analysisResponse.json().catch(() => ({}));
+            if (!analysisResponse.ok || !analysisData.success) {
+                throw new Error(analysisData.message || "Could not analyze the uploaded document.");
+            }
+            updateTypingStatus("Analyzing every section of the book…");
+            const analysisResult = await waitForUploadAnalysis(analysisData.progressId || progressId);
+            if (analysisResult.error) throw new Error(analysisResult.error);
+            hideTyping();
+            const answer = analysisResult.reply || "I could not prepare an answer from the uploaded document.";
+            currentChat.push({ role: "assistant", text: answer });
+            addAIMessage(answer);
+            if (voiceMode) speakReply(answer);
             saveCurrentChat();
             return;
         }
@@ -1400,6 +1447,7 @@ function renderHistory() {
 function newChat() {
 
     pendingUploadFile = null;
+    pendingUploadBatchCount = 1;
     fileInput.value = "";
     renderPendingAttachment();
 
@@ -1849,11 +1897,73 @@ uploadBtn.addEventListener("click",(e)=>{
 
 // ================= FILE UPLOAD =================
 
-fileInput.addEventListener("change", () => {
-    if (!fileInput.files?.length) return;
-    pendingUploadFile = fileInput.files[0];
+function attachFiles(files) {
+    const selectedFiles = Array.from(files || [])
+        .filter(file => file && typeof file.name === "string")
+        .map(file => {
+            if (file.name.trim()) return file;
+            const extension = ({
+                "image/png": "png",
+                "image/jpeg": "jpg",
+                "image/webp": "webp",
+                "application/pdf": "pdf",
+                "text/plain": "txt"
+            })[file.type] || "bin";
+            return new File([file], `pasted-file.${extension}`, { type: file.type, lastModified: file.lastModified });
+        });
+    if (!selectedFiles.length) return;
+    pendingUploadFile = selectedFiles[0];
+    pendingUploadBatchCount = selectedFiles.length;
     renderPendingAttachment();
     messageInput.focus();
+}
+
+fileInput.addEventListener("change", () => {
+    if (!fileInput.files?.length) return;
+    attachFiles(fileInput.files);
+});
+
+document.addEventListener("paste", event => {
+    const clipboard = event.clipboardData;
+    if (!clipboard) return;
+    let files = Array.from(clipboard.files || []);
+    if (!files.length) {
+        files = Array.from(clipboard.items || [])
+            .filter(item => item.kind === "file")
+            .map(item => item.getAsFile())
+            .filter(Boolean);
+    }
+    if (!files.length) return;
+    event.preventDefault();
+    attachFiles(files);
+});
+
+function dragContainsFiles(event) {
+    return Array.from(event.dataTransfer?.types || []).includes("Files");
+}
+
+document.addEventListener("dragenter", event => {
+    if (!dragContainsFiles(event)) return;
+    event.preventDefault();
+    fileDropOverlay?.classList.remove("hidden");
+});
+
+document.addEventListener("dragover", event => {
+    if (!dragContainsFiles(event)) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+});
+
+document.addEventListener("dragleave", event => {
+    if (!dragContainsFiles(event) || event.relatedTarget) return;
+    fileDropOverlay?.classList.add("hidden");
+});
+
+document.addEventListener("drop", event => {
+    if (!dragContainsFiles(event)) return;
+    event.preventDefault();
+    fileDropOverlay?.classList.add("hidden");
+    attachFiles(event.dataTransfer.files);
 });
 
 

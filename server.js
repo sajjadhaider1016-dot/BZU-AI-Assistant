@@ -682,7 +682,7 @@ const MAX_GENERATION_TOKENS = Math.min(
     Math.max(1000, Number.parseInt(process.env.MAX_GENERATION_TOKENS, 10) || 7000)
 );
 const MAX_BOOK_TEXT_CHARS = 5_000_000;
-const MAX_DOCUMENT_CHUNK_CHARS = 60_000;
+const MAX_DOCUMENT_CHUNK_CHARS = 30_000;
 const PDF_OCR_LANGUAGES = process.env.PDF_OCR_LANGUAGES || "eng+urd+ara";
 
 const uploadProgress = new Map();
@@ -717,6 +717,41 @@ function splitDocumentIntoChunks(text, maxCharacters = MAX_DOCUMENT_CHUNK_CHARS)
     return chunks;
 }
 
+async function requestDocumentCompletion(options) {
+    const retryableCodes = new Set(["ECONNRESET", "ETIMEDOUT", "EAI_AGAIN", "ECONNABORTED"]);
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+        try {
+            return await client.chat.completions.create(options);
+        } catch (error) {
+            const status = Number(error?.status || error?.statusCode || 0);
+            const retryable = status === 429 || status >= 500 || retryableCodes.has(error?.code);
+            if (!retryable || attempt === 3) throw error;
+            const delayMs = Math.min(12_000, 1_000 * (2 ** attempt));
+            console.warn(`Document analysis request failed (${status || error?.code || "network"}); retry ${attempt + 1}/3 in ${delayMs}ms.`);
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
+    }
+    throw new Error("Document analysis could not be completed.");
+}
+
+function groupAnalysisNotes(notes, maximumCharacters = 18_000) {
+    const groups = [];
+    let group = [];
+    let characters = 0;
+    for (const note of notes) {
+        const size = note.length;
+        if (group.length && characters + size > maximumCharacters) {
+            groups.push(group);
+            group = [];
+            characters = 0;
+        }
+        group.push(note);
+        characters += size;
+    }
+    if (group.length) groups.push(group);
+    return groups;
+}
+
 async function analyzeUploadedDocument(documentText, userRequest, documentWasTrimmed, onProgress = () => {}) {
     const chunks = splitDocumentIntoChunks(documentText);
     const request = String(userRequest || "").trim()
@@ -727,7 +762,7 @@ async function analyzeUploadedDocument(documentText, userRequest, documentWasTri
 
     if (chunks.length === 1) {
         onProgress("Analyzing the document…");
-        const completion = await client.chat.completions.create({
+        const completion = await requestDocumentCompletion({
             model: AI_MODEL,
             temperature: 0.2,
             max_tokens: MAX_DOCUMENT_TOKENS,
@@ -760,10 +795,10 @@ async function analyzeUploadedDocument(documentText, userRequest, documentWasTri
         onProgress(`Analyzing book ${partLabel}…`);
         console.log(`Document analysis ${partLabel}/${chunks.length}`);
 
-        const completion = await client.chat.completions.create({
+        const completion = await requestDocumentCompletion({
             model: AI_MODEL,
             temperature: 0.1,
-            max_tokens: 900,
+                    max_tokens: 700,
             messages: [
                 {
                     role: "system",
@@ -784,8 +819,42 @@ async function analyzeUploadedDocument(documentText, userRequest, documentWasTri
         partNotes.push(`===== ${partLabel.toUpperCase()} =====\n${notes}`);
     }
 
+    // Reduce large note sets in batches so a full book never has to fit into
+    // one oversized final prompt. Every extracted section contributes notes.
+    let synthesisNotes = partNotes;
+    let reductionLevel = 1;
+    while (synthesisNotes.length > 8 || synthesisNotes.join("\n\n").length > 36_000) {
+        const groups = groupAnalysisNotes(synthesisNotes);
+        const reducedNotes = [];
+        for (let index = 0; index < groups.length; index += 1) {
+            onProgress(`Combining book findings (${reductionLevel}, ${index + 1} of ${groups.length})…`);
+            const completion = await requestDocumentCompletion({
+                model: AI_MODEL,
+                temperature: 0.1,
+                max_tokens: 1_200,
+                messages: [
+                    {
+                        role: "system",
+                        content: `Condense evidence notes from consecutive parts of a book into a compact, accurate set of notes for a later whole-book answer. ${languageGuidance} ${safetyGuidance} Preserve chapter progression, named concepts, claims, examples, dates, qualifications, and any detail relevant to the user's request. Merge exact repetition, but do not erase distinct points. Do not add facts or write the final answer yet.`
+                    },
+                    {
+                        role: "user",
+                        content: `USER REQUEST:\n${request}\n\nBOOK SECTION NOTES:\n${groups[index].join("\n\n")}\n\nReturn concise notes that retain the distinct evidence in these sections.`
+                    }
+                ]
+            });
+            const note = completion?.choices?.[0]?.message?.content?.trim();
+            if (!note || completion?.choices?.[0]?.finish_reason === "length") {
+                throw new Error(`I could not combine book findings group ${index + 1} of ${groups.length}. Please try again or ask about fewer chapters.`);
+            }
+            reducedNotes.push(note);
+        }
+        synthesisNotes = reducedNotes;
+        reductionLevel += 1;
+    }
+
     onProgress("Combining findings from every section…");
-    const synthesis = await client.chat.completions.create({
+    const synthesis = await requestDocumentCompletion({
         model: AI_MODEL,
         temperature: 0.2,
         max_tokens: MAX_DOCUMENT_TOKENS,
@@ -796,7 +865,7 @@ async function analyzeUploadedDocument(documentText, userRequest, documentWasTri
             },
             {
                 role: "user",
-                content: `USER REQUEST:\n${request}\n\nANALYSIS NOTES FROM EVERY PART OF THE BOOK:\n\n${partNotes.join("\n\n")}`
+                content: `USER REQUEST:\n${request}\n\nANALYSIS NOTES FROM EVERY PART OF THE BOOK:\n\n${synthesisNotes.join("\n\n")}`
             }
         ]
     });
@@ -1922,6 +1991,56 @@ app.get("/api/upload-progress/:progressId", (req, res) => {
     const progress = uploadProgress.get(progressId);
     if (!progress || progress.userId !== String(req.session.userId)) return res.sendStatus(404);
     return res.json({ status: progress.status, complete: progress.complete, result: progress.result });
+});
+
+app.post("/api/analyze-upload", (req, res) => {
+    if (!req.session?.userId) return res.status(401).json({ success: false, message: "Please sign in to analyze this document." });
+    const attachmentId = String(req.body?.attachmentId || "");
+    const progressId = String(req.body?.progressId || "");
+    if (!/^[a-f0-9-]{36}\.[a-z0-9]{1,10}$/i.test(attachmentId)) {
+        return res.status(400).json({ success: false, message: "That uploaded document could not be found." });
+    }
+    if (!/^[a-f0-9-]{36}$/i.test(progressId)) {
+        return res.status(400).json({ success: false, message: "The analysis session could not be started. Please try again." });
+    }
+
+    const userDirectory = path.join(uploadedFilesDirectory, String(req.session.userId));
+    const metadataPath = path.join(userDirectory, attachmentId.replace(/\.[^.]+$/, ".json"));
+    let metadata;
+    try {
+        metadata = JSON.parse(fs.readFileSync(metadataPath, "utf8"));
+    } catch {
+        return res.status(404).json({ success: false, message: "This uploaded file is no longer available. Please attach it again." });
+    }
+    if (metadata.isImage || !String(metadata.text || "").trim()) {
+        return res.status(400).json({ success: false, message: "This attachment does not contain a readable document to analyze." });
+    }
+    if (!fs.existsSync(path.join(userDirectory, attachmentId))) {
+        return res.status(404).json({ success: false, message: "This uploaded file is no longer available. Please attach it again." });
+    }
+
+    const documentText = String(metadata.text).slice(0, MAX_BOOK_TEXT_CHARS);
+    const documentWasTrimmed = Boolean(metadata.documentWasTrimmed);
+    const instruction = String(req.body?.instruction || "").trim().slice(0, 2_000);
+    const userId = String(req.session.userId);
+    setUploadProgress(progressId, userId, "Preparing the complete document…");
+    setImmediate(async () => {
+        try {
+            const reply = await analyzeUploadedDocument(
+                documentText,
+                instruction,
+                documentWasTrimmed,
+                status => setUploadProgress(progressId, userId, status)
+            );
+            setUploadProgress(progressId, userId, "Analysis complete.", true, { reply });
+        } catch (error) {
+            console.error("UPLOADED DOCUMENT FOLLOW-UP ANALYSIS ERROR:", error?.message || error);
+            setUploadProgress(progressId, userId, error?.message || "Document analysis failed.", true, {
+                error: error?.message || "Document analysis failed."
+            });
+        }
+    });
+    return res.json({ success: true, progressId });
 });
 
 app.post(

@@ -2394,6 +2394,47 @@ body.dark .close-modal:hover{
 }
 
 /* ================= IMAGE CREATION COMPOSER ================= */
+.file-drop-overlay {
+    position: fixed;
+    z-index: 10000;
+    inset: 12px;
+    display: grid;
+    place-items: center;
+    border: 3px dashed #3b82f6;
+    border-radius: 28px;
+    background: rgba(15, 23, 42, .58);
+    pointer-events: none;
+    backdrop-filter: blur(4px);
+}
+
+.file-drop-card {
+    display: grid;
+    justify-items: center;
+    gap: 10px;
+    width: min(380px, calc(100vw - 56px));
+    padding: 32px 24px;
+    border: 1px solid rgba(255, 255, 255, .24);
+    border-radius: 22px;
+    background: var(--card);
+    color: var(--text);
+    text-align: center;
+    box-shadow: 0 24px 70px rgba(0, 0, 0, .32);
+}
+
+.file-drop-card i {
+    color: #3b82f6;
+    font-size: 34px;
+}
+
+.file-drop-card strong {
+    font-size: 19px;
+}
+
+.file-drop-card span {
+    color: var(--text-light);
+    font-size: 13px;
+}
+
 .image-prompt-modal-content {
     width: min(600px, 94vw);
     padding: 0;
