@@ -1031,6 +1031,7 @@ function isBZUQuestion(message) {
         "exam", "exams", "examination", "examinations", "result", "results",
         "campus", "library", "libraries", "transport", "bus", "buses",
         "eligibility", "merit", "prospectus", "timetable", "date sheet",
+        "notice", "notices", "announcement", "announcements", "notification", "notifications", "event", "events",
         "dakhla", "dakhle", "wazifa", "wazaif", "shoba", "shobay",
         "rehayish", "ahliyat", "sharaait", "natija", "nateeja", "imtihaan", "imthaan"
     ];
