@@ -41,6 +41,8 @@ async function getUserMemories(userId) {
     }
 }
 const OpenAI = require("openai");
+const axios = require("axios");
+const cheerio = require("cheerio");
 const multer = require("multer");
 const { PDFParse } = require("pdf-parse");
 const { CanvasFactory } = require("pdf-parse/worker");
@@ -1045,6 +1047,56 @@ function isBZUQuestion(message) {
         /\b(apply|application|available|availability|amount|price|cost|deadline|date|when|where|how much|how many|tell me|information|details|about|at|in|for)\b/.test(text);
 }
 
+function isBzuNoticeQuery(message) {
+    return /\b(notice|notices|announcement|announcements|notification|notifications|event|events|news|date sheet|result|results|merit list|merit lists|tender|tenders|vacancy|vacancies|job|jobs)\b/i.test(String(message || ""));
+}
+
+async function fetchOfficialBzuNotices(query) {
+    const pageUrl = "https://bzu.edu.pk/latest-news.php";
+    const response = await axios.get(pageUrl, {
+        timeout: 10000,
+        headers: { "User-Agent": "BZU-AI-Assistant/1.0 (+https://bzu.edu.pk)" },
+        maxContentLength: 5 * 1024 * 1024
+    });
+    const $ = cheerio.load(response.data);
+    const terms = String(query || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, " ")
+        .split(/\s+/)
+        .filter(term => term.length > 2 && !["latest", "current", "show", "give", "find", "please", "bzu", "notice", "notices", "announcement", "announcements", "notification", "notifications", "event", "events", "news", "university", "about", "what", "are", "the", "for", "from"].includes(term));
+
+    const records = new Map();
+    $("a[href*='news.php?newsID=']").each((_, element) => {
+        const link = $(element);
+        const title = link.text().replace(/\s+/g, " ").trim();
+        const href = link.attr("href");
+        if (!title || !href) return;
+        const url = new URL(href, pageUrl).toString();
+        if (!url.startsWith("https://bzu.edu.pk/news.php?newsID=")) return;
+
+        let surroundingText = "";
+        let parent = link.parent();
+        for (let depth = 0; depth < 4 && parent.length; depth += 1, parent = parent.parent()) {
+            const candidate = parent.text().replace(/\s+/g, " ").trim();
+            if (candidate.length > title.length && candidate.length < 1200) surroundingText = candidate;
+        }
+        const dateMatch = surroundingText.match(/\b\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\b(?:\s*,?\s*\d{4})?/i);
+        records.set(url, { title, url, date: dateMatch?.[0] || "", surroundingText });
+    });
+
+    let items = [...records.values()];
+    if (terms.length) {
+        const matching = items.filter(item => {
+            const searchable = item.title.toLowerCase();
+            return terms.some(term => searchable.includes(term));
+        });
+        if (matching.length) items = matching;
+    }
+    return items.slice(0, 8).map(item => ({
+        text: `Current information from BZU's official Latest News & Media page. Title: ${item.title}${item.date ? `\nDate shown: ${item.date}` : ""}\nOfficial link: ${item.url}`
+    }));
+}
+
 // ======================================================
 // MODE DETECTION
 // ======================================================
@@ -1390,6 +1442,20 @@ console.log(
                 knowledge =
                     searchKnowledge(expandRomanUrduSearchTerms(query)) || [];
 
+                if (isBzuNoticeQuery(latestMessage)) {
+                    try {
+                        const currentNotices = await fetchOfficialBzuNotices(latestMessage);
+                        if (currentNotices.length) {
+                            knowledge = [...currentNotices, ...knowledge];
+                            console.log("LIVE BZU OFFICIAL NOTICES FOUND:", currentNotices.length);
+                        } else {
+                            console.log("LIVE BZU OFFICIAL NOTICES: no matching items");
+                        }
+                    } catch (liveNoticeError) {
+                        console.error("LIVE BZU NOTICE LOOKUP FAILED:", liveNoticeError?.message || liveNoticeError);
+                    }
+                }
+
                 console.log(
                     "BZU KNOWLEDGE SEARCH PERFORMED"
                 );
@@ -1500,6 +1566,8 @@ LANGUAGE AND ACCURACY
 Understand and answer in the language the user used. This includes Urdu, English, Arabic, and mixed-language messages. Recognize Roman Urdu written with Latin letters (for example, "BZU ke programs kon se hain?", "hostel ki fees kitni hai?", or "admission kab shuru honge?") and answer naturally in Roman Urdu when the user writes in Roman Urdu. If the user explicitly requests a language, use that language. Do not mistake Roman Urdu for broken English or ask the user to translate.
 
 For BZU questions in any language, use only the retrieved BZU facts. Translate the response into the user's language without changing names, dates, eligibility, or numbers. If a required fact is unavailable, clearly say in the user's language that it could not be found in the BZU information. Never guess to sound helpful. For general questions, answer accurately, explain uncertainty when needed, and do not claim to understand a phrase if its meaning is unclear; ask a concise clarification in the user's language.
+
+For requests about current BZU notices, news, announcements, events, jobs, scholarships, or schedules, use any live official BZU items included in the retrieved knowledge. List the matching title and date and include its official link. If the live lookup has no matching items or could not load, say so clearly and provide https://bzu.edu.pk/latest-news.php so the user can check the official page; do not invent current notices.
 
 ======================================================
 IMPORTANT: CURRENT QUESTION ONLY
