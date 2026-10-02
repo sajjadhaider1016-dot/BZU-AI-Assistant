@@ -20,6 +20,14 @@ const uploadBtn = document.getElementById("uploadBtn");
 
 const imageGenerateBtn = document.getElementById("imageGenerateBtn");
 
+const imagePromptModal = document.getElementById("imagePromptModal");
+
+const imagePromptForm = document.getElementById("imagePromptForm");
+
+const imagePromptInput = document.getElementById("imagePromptInput");
+
+const imagePromptCharacterCount = document.getElementById("imagePromptCharacterCount");
+
 const imageLibraryBtn = document.getElementById("imageLibraryBtn");
 
 const imageLibraryModal = document.getElementById("imageLibraryModal");
@@ -468,10 +476,11 @@ function imagePromptFromMessage(message) {
 
 async function generateImage(promptValue = null, originalUserText = "") {
     if (isTyping) return;
-    const prompt = typeof promptValue === "string" && promptValue.trim()
-        ? promptValue
-        : window.prompt("Describe the image you want to create (up to 500 characters):");
-    if (typeof prompt !== "string" || !prompt.trim()) return;
+    if (typeof promptValue !== "string" || !promptValue.trim()) {
+        openImagePrompt();
+        return;
+    }
+    const prompt = promptValue;
     const cleanedPrompt = prompt.trim();
     if (cleanedPrompt.length > 500) {
         alert("Please keep the image description to 500 characters or fewer.");
@@ -580,6 +589,53 @@ async function generateImage(promptValue = null, originalUserText = "") {
         if (voiceMode) resumeVoiceListening();
     }
 }
+
+function openImagePrompt() {
+    if (!imagePromptModal || isTyping) return;
+    imagePromptModal.classList.remove("hidden");
+    const currentPrompt = imagePromptInput.value;
+    imagePromptCharacterCount.textContent = `${currentPrompt.length} / 500`;
+    requestAnimationFrame(() => imagePromptInput.focus());
+}
+
+function closeImagePrompt(restoreFocus = true) {
+    imagePromptModal?.classList.add("hidden");
+    if (restoreFocus) imageGenerateBtn?.focus();
+}
+
+imagePromptInput?.addEventListener("input", () => {
+    imagePromptCharacterCount.textContent = `${imagePromptInput.value.length} / 500`;
+});
+
+imagePromptForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const prompt = imagePromptInput.value.trim();
+    if (!prompt) {
+        imagePromptInput.focus();
+        return;
+    }
+    if (isTyping) return;
+    closeImagePrompt(false);
+    imagePromptInput.value = "";
+    imagePromptCharacterCount.textContent = "0 / 500";
+    await generateImage(prompt);
+});
+
+document.querySelectorAll("[data-image-prompt]").forEach((button) => {
+    button.addEventListener("click", () => {
+        imagePromptInput.value = button.dataset.imagePrompt || "";
+        imagePromptInput.dispatchEvent(new Event("input", { bubbles: true }));
+        imagePromptInput.focus();
+    });
+});
+
+document.getElementById("cancelImagePromptBtn")?.addEventListener("click", closeImagePrompt);
+document.getElementById("closeImagePromptBtn")?.addEventListener("click", closeImagePrompt);
+document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && imagePromptModal && !imagePromptModal.classList.contains("hidden")) {
+        closeImagePrompt();
+    }
+});
 
 async function openImageLibrary() {
     imageLibraryModal.classList.remove("hidden");
@@ -1217,7 +1273,7 @@ sendBtn.addEventListener(
 
 );
 
-imageGenerateBtn?.addEventListener("click", () => generateImage());
+imageGenerateBtn?.addEventListener("click", openImagePrompt);
 
 
 
@@ -1594,6 +1650,10 @@ document.querySelectorAll(
                 imageLibraryModal.classList.add("hidden");
             }
 
+            if (imagePromptModal) {
+                imagePromptModal.classList.add("hidden");
+            }
+
         }
 
     );
@@ -1635,6 +1695,10 @@ window.addEventListener(
 
         if (imageLibraryModal && e.target === imageLibraryModal) {
             imageLibraryModal.classList.add("hidden");
+        }
+
+        if (imagePromptModal && e.target === imagePromptModal) {
+            imagePromptModal.classList.add("hidden");
         }
 
     }
