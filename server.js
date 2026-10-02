@@ -142,6 +142,69 @@ app.use(
 );
 
 const generatedImagesDirectory = path.join(dataDirectory, "generated-images");
+const officialBzuImagePages = [
+    { url: "https://bzu.edu.pk/campus-facilities.php", label: "BZU Campus Facilities" },
+    { url: "https://cs.bzu.edu.pk/gallery.php", label: "BZU Computer Science Gallery" },
+    { url: "https://bzu.edu.pk/", label: "BZU Official Website" }
+];
+
+async function fetchOfficialBzuCampusImages() {
+    const images = new Map();
+    for (const page of officialBzuImagePages) {
+        try {
+            const response = await axios.get(page.url, {
+                timeout: 10000,
+                headers: { "User-Agent": "BZU-AI-Assistant/1.0" },
+                maxContentLength: 5 * 1024 * 1024
+            });
+            const $ = cheerio.load(response.data);
+            $("img").each((_, element) => {
+                const image = $(element);
+                const rawSrc = image.attr("src") || image.attr("data-src") || image.attr("data-lazy-src");
+                if (!rawSrc || /^(data:|blob:)/i.test(rawSrc)) return;
+                let imageUrl;
+                try { imageUrl = new URL(rawSrc, page.url); } catch { return; }
+                const hostname = imageUrl.hostname.toLowerCase();
+                if (imageUrl.protocol !== "https:" || !(hostname === "bzu.edu.pk" || hostname.endsWith(".bzu.edu.pk"))) return;
+                if (/logo|icon|avatar|flag|captcha|social|facebook|twitter|whatsapp/i.test(imageUrl.pathname)) return;
+                const width = Number(image.attr("width"));
+                const height = Number(image.attr("height"));
+                if ((width && width < 120) || (height && height < 90)) return;
+
+                const alt = String(image.attr("alt") || image.attr("title") || "").replace(/\s+/g, " ").trim();
+                const parentText = image.closest("figure, .gallery-item, .portfolio-item, .item, .card, article").text().replace(/\s+/g, " ").trim();
+                const title = (alt || parentText || page.label).slice(0, 180);
+                if (/patient|diagnos|medical examination|test report|ambulance|pharmacy/i.test(`${imageUrl.pathname} ${title}`)) return;
+                if (!images.has(imageUrl.toString())) {
+                    images.set(imageUrl.toString(), {
+                        imageUrl: imageUrl.toString(),
+                        title: title || page.label,
+                        sourceUrl: page.url,
+                        sourceLabel: page.label
+                    });
+                }
+            });
+        } catch (error) {
+            console.warn("OFFICIAL BZU IMAGE PAGE UNAVAILABLE:", page.url, error?.message || error);
+        }
+    }
+    return [...images.values()].slice(0, 12);
+}
+
+app.get("/api/bzu-campus-images", async (req, res) => {
+    if (!req.session?.userId) return res.status(401).json({ message: "Please sign in to view BZU campus photos." });
+    try {
+        const images = await fetchOfficialBzuCampusImages();
+        if (!images.length) {
+            return res.status(502).json({ message: "I could not load official BZU photos right now. Please try again later or visit the BZU campus pages directly." });
+        }
+        return res.json({ images });
+    } catch (error) {
+        console.error("BZU CAMPUS IMAGE LOOKUP ERROR:", error?.message || error);
+        return res.status(502).json({ message: "I could not load official BZU photos right now. Please try again later." });
+    }
+});
+
 app.post("/api/generate-image", async (req, res) => {
     if (!req.session?.userId) {
         return res.status(401).json({ message: "Please sign in to generate an image." });

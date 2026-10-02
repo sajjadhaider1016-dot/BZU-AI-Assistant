@@ -421,6 +421,37 @@ function createMessage(type, text, extra = {}) {
         }
     }
 
+    if (type === "ai" && Array.isArray(extra.officialImages) && extra.officialImages.length) {
+        const bubble = message.querySelector(".bubble");
+        const gallery = document.createElement("div");
+        gallery.className = "official-campus-gallery";
+        extra.officialImages.forEach(item => {
+            const card = document.createElement("figure");
+            card.className = "official-campus-card";
+            const link = document.createElement("a");
+            link.href = item.sourceUrl;
+            link.target = "_blank";
+            link.rel = "noopener noreferrer";
+            link.title = `View source: ${item.sourceLabel || "BZU official website"}`;
+            const image = document.createElement("img");
+            image.src = item.imageUrl;
+            image.alt = item.title || "Photo from an official BZU page";
+            image.loading = "lazy";
+            link.appendChild(image);
+            const caption = document.createElement("figcaption");
+            caption.textContent = item.title || "BZU campus photo";
+            const source = document.createElement("a");
+            source.href = item.sourceUrl;
+            source.target = "_blank";
+            source.rel = "noopener noreferrer";
+            source.className = "official-campus-source";
+            source.textContent = `Source: ${item.sourceLabel || "BZU official website"}`;
+            card.append(link, caption, source);
+            gallery.appendChild(card);
+        });
+        bubble.appendChild(gallery);
+    }
+
     if (type === "ai" && Array.isArray(extra.fileDownloads)) {
         const bubble = message.querySelector(".bubble");
         extra.fileDownloads.forEach(file => {
@@ -475,6 +506,50 @@ function imagePromptFromMessage(message) {
 
     const description = raw.match(new RegExp(`\\b${media}\\b\\s*(?:of|showing|with|for|about)?\\s+([\\s\\S]+)$`, "i"));
     return (description?.[1] || raw).trim();
+}
+
+function isOfficialBzuCampusImageRequest(message) {
+    const text = String(message || "").toLowerCase();
+    if (/\b(create|generate|draw|design|make|paint|render)\b/i.test(text)) return false;
+    const asksForPhoto = /\b(image|images|photo|photos|picture|pictures|gallery|tasveer|tasvir)\b|تصویر|صورة/i.test(text);
+    const mentionsBzuCampus = /\b(bzu|bahauddin zakariya|campus)\b/i.test(text);
+    return asksForPhoto && mentionsBzuCampus;
+}
+
+async function showOfficialBzuCampusImages(userText) {
+    if (isTyping) return;
+    welcomeScreen.style.display = "none";
+    chatContainer.style.display = "flex";
+    currentChat.push({ role: "user", text: userText });
+    rememberUser(userText);
+    addUserMessage(userText);
+    messageInput.value = "";
+    messageInput.style.height = "auto";
+    isTyping = true;
+    showTyping("Finding photos on official BZU pages…");
+    try {
+        const response = await fetch("/api/bzu-campus-images", { cache: "no-store" });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.message || "Could not load official BZU photos.");
+        const assistantMessage = {
+            role: "assistant",
+            text: "Here are photos from BZU’s official website and department gallery. Open a photo’s source to see its original page.",
+            officialImages: data.images || []
+        };
+        currentChat.push(assistantMessage);
+        hideTyping();
+        addAIMessage(assistantMessage.text, assistantMessage);
+        saveCurrentChat();
+    } catch (error) {
+        hideTyping();
+        const assistantMessage = { role: "assistant", text: error.message || "Could not load official BZU photos." };
+        currentChat.push(assistantMessage);
+        addAIMessage(assistantMessage.text);
+        saveCurrentChat();
+    } finally {
+        isTyping = false;
+        if (voiceMode) resumeVoiceListening();
+    }
 }
 
 async function generateImage(promptValue = null, originalUserText = "") {
@@ -876,6 +951,11 @@ async function sendMessage() {
     if ((!text && !fileToUpload) || isTyping) return;
     if (fileToUpload && fileToUpload.size === 0) {
         addAIMessage(`“${fileToUpload.name || "This file"}” is empty (0 bytes), so it cannot be read. Download or copy the complete file again, then attach it.`);
+        return;
+    }
+
+    if (!fileToUpload && isOfficialBzuCampusImageRequest(text)) {
+        await showOfficialBzuCampusImages(text);
         return;
     }
 
