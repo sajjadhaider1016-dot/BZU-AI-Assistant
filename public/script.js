@@ -468,8 +468,10 @@ function imagePromptFromMessage(message) {
 
 async function generateImage(promptValue = null, originalUserText = "") {
     if (isTyping) return;
-    const prompt = promptValue || window.prompt("Describe the image you want to create (up to 500 characters):");
-    if (!prompt || !prompt.trim()) return;
+    const prompt = typeof promptValue === "string" && promptValue.trim()
+        ? promptValue
+        : window.prompt("Describe the image you want to create (up to 500 characters):");
+    if (typeof prompt !== "string" || !prompt.trim()) return;
     const cleanedPrompt = prompt.trim();
     if (cleanedPrompt.length > 500) {
         alert("Please keep the image description to 500 characters or fewer.");
@@ -1179,7 +1181,7 @@ sendBtn.addEventListener(
 
 );
 
-imageGenerateBtn?.addEventListener("click", generateImage);
+imageGenerateBtn?.addEventListener("click", () => generateImage());
 
 
 
