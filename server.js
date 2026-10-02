@@ -143,14 +143,18 @@ app.use(
 
 const generatedImagesDirectory = path.join(dataDirectory, "generated-images");
 const officialBzuImagePages = [
-    { url: "https://bzu.edu.pk/campus-facilities.php", label: "BZU Campus Facilities" },
-    { url: "https://cs.bzu.edu.pk/gallery.php", label: "BZU Computer Science Gallery" },
-    { url: "https://bzu.edu.pk/", label: "BZU Official Website" }
+    { url: "https://bzu.edu.pk/", label: "BZU Campus" },
+    { url: "https://bzu.edu.pk/admin-positions.php", label: "BZU Administration Block" },
+    ...Array.from({ length: 10 }, (_, index) => ({
+        url: `https://bzu.edu.pk/faculty.php?id=${index + 1}`,
+        label: "BZU Department View"
+    }))
 ];
 
 async function fetchOfficialBzuCampusImages() {
     const images = new Map();
-    for (const page of officialBzuImagePages) {
+    await Promise.all(officialBzuImagePages.map(async page => {
+        const pageOrder = officialBzuImagePages.indexOf(page);
         try {
             const response = await axios.get(page.url, {
                 timeout: 10000,
@@ -164,31 +168,56 @@ async function fetchOfficialBzuCampusImages() {
                 if (!rawSrc || /^(data:|blob:)/i.test(rawSrc)) return;
                 let imageUrl;
                 try { imageUrl = new URL(rawSrc, page.url); } catch { return; }
-                const hostname = imageUrl.hostname.toLowerCase();
-                if (imageUrl.protocol !== "https:" || !(hostname === "bzu.edu.pk" || hostname.endsWith(".bzu.edu.pk"))) return;
-                if (/logo|icon|avatar|flag|captcha|social|facebook|twitter|whatsapp/i.test(imageUrl.pathname)) return;
-                const width = Number(image.attr("width"));
-                const height = Number(image.attr("height"));
-                if ((width && width < 120) || (height && height < 90)) return;
+                if (imageUrl.protocol !== "https:" || imageUrl.hostname.toLowerCase() !== "bzu.edu.pk") return;
 
-                const alt = String(image.attr("alt") || image.attr("title") || "").replace(/\s+/g, " ").trim();
-                const parentText = image.closest("figure, .gallery-item, .portfolio-item, .item, .card, article").text().replace(/\s+/g, " ").trim();
-                const title = (alt || parentText || page.label).slice(0, 180);
-                if (/patient|diagnos|medical examination|test report|ambulance|pharmacy/i.test(`${imageUrl.pathname} ${title}`)) return;
+                const pathname = imageUrl.pathname.toLowerCase();
+                const isCampusView = pathname.startsWith("/img/slider/");
+                const isAdministrationView = pathname === "/img/univ-admin.jpg";
+                const isDepartmentView = /^\/img\/faculty\/\d+\/[\w.-]+\.(?:jpe?g|png|webp)$/i.test(imageUrl.pathname);
+                if (!isCampusView && !isAdministrationView && !isDepartmentView) return;
+
+                let title = String(image.attr("alt") || image.attr("title") || "").replace(/\s+/g, " ").trim();
+                let sourceLabel = page.label;
+                if (isDepartmentView) {
+                    let context = "";
+                    for (let parent = image.parent(), depth = 0; parent.length && depth < 5; parent = parent.parent(), depth += 1) {
+                        const text = parent.text().replace(/\s+/g, " ").trim();
+                        if (/(Department|Institute|School|Centre|Center|College)\b/i.test(text) && text.length < 260) {
+                            context = text;
+                            break;
+                        }
+                    }
+                    const departmentName = context
+                        .replace(/\b(?:Prof\.?|Professor|Dr\.?|Doctor|Engr\.?|Engineer)\b[\s\S]*$/i, "")
+                        .replace(/\s+/g, " ").trim();
+                    title = departmentName || "BZU Department Building";
+                    sourceLabel = title;
+                } else if (isCampusView) {
+                    title = title || "BZU Campus View";
+                    sourceLabel = "BZU Campus";
+                } else {
+                    title = "BZU Administration Block";
+                    sourceLabel = "BZU Administration Block";
+                }
+
                 if (!images.has(imageUrl.toString())) {
                     images.set(imageUrl.toString(), {
                         imageUrl: imageUrl.toString(),
-                        title: title || page.label,
+                        title: title.slice(0, 180),
                         sourceUrl: page.url,
-                        sourceLabel: page.label
+                        sourceLabel,
+                        pageOrder
                     });
                 }
             });
         } catch (error) {
             console.warn("OFFICIAL BZU IMAGE PAGE UNAVAILABLE:", page.url, error?.message || error);
         }
-    }
-    return [...images.values()].slice(0, 12);
+    }));
+    return [...images.values()]
+        .sort((a, b) => a.pageOrder - b.pageOrder)
+        .slice(0, 12)
+        .map(({ pageOrder, ...image }) => image);
 }
 
 app.get("/api/bzu-campus-images", async (req, res) => {
