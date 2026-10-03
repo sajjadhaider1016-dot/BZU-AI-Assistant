@@ -1476,6 +1476,13 @@ const isMemoryQuestion =
 
 const isBZUQuery =
     isBZUQuestion(latestMessage);
+
+const isShortBzuTopicPrompt =
+    isBZUQuery &&
+    query.split(/\s+/).filter(Boolean).length <= 3 &&
+    /\b(lms|hostel|hostels|program|programs|admission|admissions|fee|fees|scholarship|scholarships|department|departments|transport)\b/i.test(query) &&
+    !/\b(what|which|how|when|where|why|who|explain|describe|list|details|compare|full|complete|all|tell|give)\b/i.test(query);
+
 // ==================================================
 // MEMORY DECISION
 // ==================================================
@@ -1759,7 +1766,11 @@ LANGUAGE AND ACCURACY
 
 Understand and answer in the language the user used. This includes Urdu, English, Arabic, and mixed-language messages. Recognize Roman Urdu written with Latin letters (for example, "BZU ke programs kon se hain?", "hostel ki fees kitni hai?", or "admission kab shuru honge?") and answer naturally in Roman Urdu when the user writes in Roman Urdu. If the user explicitly requests a language, use that language. Do not mistake Roman Urdu for broken English or ask the user to translate.
 
-For BZU questions in any language, use only the retrieved BZU facts. Translate the response into the user's language without changing names, dates, eligibility, or numbers. Never guess to sound helpful. If the retrieved facts answer only part of the question, state the supported facts first and name only the specific details that are missing. Do not add the blanket sentence "I could not find this information in my BZU knowledge" when you have already provided relevant facts; that would contradict your answer. Use that sentence only when no relevant BZU facts were retrieved. When retrieved prospectus passages have different publication years, use the newest year that contains the requested fact and identify that year in the answer. Do not combine conflicting figures from different years. Use an older prospectus only if the user asks about that year or the newer prospectus does not cover the fact. For general questions, answer accurately, explain uncertainty when needed, and do not claim to understand a phrase if its meaning is unclear; ask a concise clarification in the user's language.
+For BZU questions in any language, use retrieved BZU facts and the verified official LMS reference below. Translate the response into the user's language without changing names, dates, eligibility, or numbers. Never guess to sound helpful. If the retrieved facts answer only part of the question, state the supported facts first and name only the specific details that are missing. Do not add the blanket sentence "I could not find this information in my BZU knowledge" when you have already provided relevant facts; that would contradict your answer. Use that sentence only when no relevant BZU facts were retrieved. When retrieved prospectus passages have different publication years, use the newest year that contains the requested fact and identify that year in the answer. Do not combine conflicting figures from different years. Use an older prospectus only if the user asks about that year or the newer prospectus does not cover the fact. For general questions, answer accurately, explain uncertainty when needed, and do not claim to understand a phrase if its meaning is unclear; ask a concise clarification in the user's language.
+
+For a short BZU topic prompt such as "BZU LMS", "Hostel", or "Admissions", give a brief overview from the BZU knowledge: no more than two concise sentences or three short bullets, with no heading. Do not turn it into a comprehensive report or list every detail missing from the source.
+
+Verified official BZU LMS information (checked against the live official pages): The LMS sign-in page is https://lms.bzu.edu.pk/ (it opens the BZU LMS login page). It has Username and Password fields, a Log in button, and a Google sign-in option. The official password recovery page is https://lms.bzu.edu.pk/login/forgot_password.php; a user can submit their LMS username or registered email address, and if the account is found, recovery instructions are sent to that email. The official login page does not publish a default/first-time password or say that the student portal credentials are the same; never invent these. For a first-time account or unknown credentials, advise the student to contact their department or BZU LMS administrator. This is distinct from https://portal.bzu.edu.pk/, the separate student information portal. When a user asks about the BZU LMS, its link, or how to log in, provide the actual LMS link and these verified steps directly; do not claim the prospectus lacks the link and do not confuse it with the student portal. Sources: https://lms.bzu.edu.pk/ and https://lms.bzu.edu.pk/login/forgot_password.php.
 
 For requests about current BZU notices, news, announcements, events, jobs, scholarships, or schedules, use any live official BZU items included in the retrieved knowledge. List the matching title and date and include its official link. If the live lookup has no matching items or could not load, say so clearly and provide https://bzu.edu.pk/latest-news.php so the user can check the official page; do not invent current notices.
 
@@ -2181,7 +2192,9 @@ When creating files, include the requested content in the file itself. Prefer a 
 
                 max_tokens: generatedFileExtensions.has(normalizedFileFormat)
                     ? MAX_GENERATION_TOKENS
-                    : MAX_CHAT_TOKENS
+                    : isShortBzuTopicPrompt
+                        ? 220
+                        : MAX_CHAT_TOKENS
             });
 
         // ==================================================
