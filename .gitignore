@@ -8,3 +8,4 @@ prisma/dev.db
 .windsurf/
 .agents/
 data/
+.ui-refresh-backup/
