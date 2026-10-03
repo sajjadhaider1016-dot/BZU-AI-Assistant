@@ -946,10 +946,15 @@ const client = new OpenAI({
 // ======================================================
 const AI_MODEL =
     process.env.AI_MODEL || "openai/gpt-oss-120b";
+// Keep everyday replies on Groq's faster GPT-OSS 20B model by default.
+// Long document analysis and file generation continue using AI_MODEL.
+const CHAT_MODEL =
+    process.env.CHAT_MODEL || "openai/gpt-oss-20b";
 
 console.log("=================================");
 console.log("ENV AI_MODEL:", process.env.AI_MODEL);
 console.log("ACTIVE MODEL:", AI_MODEL);
+console.log("CHAT MODEL:", CHAT_MODEL);
 console.log("=================================");
 
 const MAX_CHAT_TOKENS = 800;
@@ -1837,7 +1842,7 @@ You are BZU AI Assistant, an intelligent university assistant developed by Sajja
 
 Today's date in Pakistan is ${new Date().toLocaleDateString("en-GB", { timeZone: "Asia/Karachi" })}. Use it to distinguish active deadlines from expired scholarship notices.
 
-The application uses Groq as its AI service and the configured model is ${AI_MODEL}. If asked which AI model or provider is used, answer accurately using those values. Never claim to be ChatGPT or GPT-4.
+The application uses Groq as its AI service. Normal chat uses ${CHAT_MODEL}; long document analysis and file generation use ${AI_MODEL}. If asked which AI model or provider is used, answer accurately using those values. Never claim to be ChatGPT or GPT-4.
 
 Your purpose is to help users with:
 
@@ -2268,12 +2273,13 @@ When creating files, include the requested content in the file itself. Prefer a 
         // SEND TO GROQ
         // ==================================================
 
-        console.log("Sending request to Groq...");
+        const chatStartedAt = Date.now();
+        console.log(`Sending request to Groq (${CHAT_MODEL})...`);
 
         const completion =
             await client.chat.completions.create({
 
-                model: AI_MODEL,
+                model: CHAT_MODEL,
 
                 messages: chatMessages,
 
@@ -2284,17 +2290,29 @@ When creating files, include the requested content in the file itself. Prefer a 
                     : isShortBzuTopicPrompt
                         ? (isBzuScholarshipQuery(latestMessage) ? 700 : 220)
                         : MAX_CHAT_TOKENS
+            }, {
+                timeout: 45_000,
+                maxRetries: 1
             });
 
         // ==================================================
         // GET RESPONSE
         // ==================================================
 
-        const reply =
-            completion?.choices?.[0]?.message?.content ||
-            "I could not generate a response.";
+        const replyContent = completion?.choices?.[0]?.message?.content;
+        const reply = typeof replyContent === "string" && replyContent.trim()
+            ? replyContent.trim()
+            : "I couldn't produce a reply this time. Please try again.";
 
         const finishReason = completion?.choices?.[0]?.finish_reason;
+        console.log("GROQ CHAT TIMING:", JSON.stringify({
+            model: CHAT_MODEL,
+            durationMs: Date.now() - chatStartedAt,
+            finishReason: finishReason || null,
+            promptTokens: completion?.usage?.prompt_tokens ?? null,
+            completionTokens: completion?.usage?.completion_tokens ?? null,
+            emptyReply: !replyContent
+        }));
         if (generatedFileExtensions.has(normalizedFileFormat) && finishReason === "length") {
             return res.status(502).json({
                 success: false,
