@@ -250,8 +250,11 @@ function searchKnowledge(query) {
             .test(normalizedQuery);
 
     const isScholarshipQuestion =
-        /\bscholarship\b|\bscholarships\b|\bfinancial aid\b|\baid\b/
+        /\bscholarship\b|\bscholarships\b|\bfinancial aid\b|\baid\b|\bhonhaar\b|\bhonhar\b|\bpeef\b|\bbisp\b|\bhec need.?based\b/
             .test(normalizedQuery);
+
+    const isTransportQuestion =
+        /\btransport\b|\bbus\b|\bbuses\b|\bcoaster\b|\broute\b|\bschedule\b/.test(normalizedQuery);
 
     const isContactQuestion =
         /\bcontact\b|\bphone\b|\btelephone\b|\bemail\b|\baddress\b|\blocation\b|\bhelpline\b/
@@ -682,6 +685,24 @@ function searchKnowledge(query) {
             if (text.includes("scholarship")) {
                 score += 5000;
             }
+
+            // Prefer the prospectus's dedicated scholarship section over
+            // incidental mentions in staff lists and department profiles.
+            const scholarshipMentions = (text.match(/\bscholarships?\b|\bfinancial aid\b/gi) || []).length;
+            score += Math.min(scholarshipMentions, 12) * 2500;
+
+            if (/scholarship cell|financial aid office|following scholarships are currently administered|scholarships and financial assistance/i.test(text)) {
+                score += 50000;
+            }
+        }
+
+        // Match the university-wide transport details, not academic uses of
+        // words such as "transport economics" or "transportation lab".
+        if (isTransportQuestion) {
+            if (/^\s*transport\s*$/im.test(text)) score += 50000;
+            if (/fleet of\s+\d+\s+buses/i.test(text)) score += 25000;
+            if (/schedule announced from time to time by the transport officer/i.test(text)) score += 18000;
+            if (/\btransport(?:ation)?\b/i.test(title)) score += 12000;
         }
 
         // ==================================================
