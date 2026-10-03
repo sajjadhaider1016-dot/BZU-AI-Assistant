@@ -1225,6 +1225,7 @@ function isBZUQuestion(message) {
         "program", "programs", "degree", "degrees", "semester", "semesters",
         "exam", "exams", "examination", "examinations", "result", "results",
         "campus", "library", "libraries", "transport", "bus", "buses",
+        "lms", "learning management system",
         "eligibility", "merit", "prospectus", "timetable", "date sheet",
         "notice", "notices", "announcement", "announcements", "notification", "notifications", "event", "events",
         "dakhla", "dakhle", "wazifa", "wazaif", "shoba", "shobay",
@@ -1790,7 +1791,7 @@ A question is BZU-specific if the CURRENT question either explicitly refers to:
 - Bahauddin Zakariya
 - Zakariya University
 
-OR asks about a BZU campus topic without naming a different university. In this BZU assistant, short topic prompts such as "Programs", "Hostel", "Admissions", "Fees", "Scholarships", or "Departments" refer to BZU and should be answered from the retrieved BZU knowledge.
+OR asks about a BZU campus topic without naming a different university. In this BZU assistant, short topic prompts such as "Programs", "Hostel", "Admissions", "Fees", "Scholarships", "Departments", or "LMS" refer to BZU and should be answered from the retrieved BZU knowledge.
 
 Clearly general questions remain general. For example, "What is a hostel?" asks for a definition; "Hostel" or "BZU hostel details" asks about BZU.
 

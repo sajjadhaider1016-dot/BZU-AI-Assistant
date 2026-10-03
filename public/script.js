@@ -1953,7 +1953,8 @@ document.querySelectorAll(".quick-btn").forEach(btn=>{
 
     btn.addEventListener("click",()=>{
 
-        messageInput.value=btn.innerText;
+        const topic = btn.textContent.trim().replace(/^[^A-Za-z0-9]+/, "");
+        messageInput.value = `BZU ${topic}`;
 
         sendMessage();
 

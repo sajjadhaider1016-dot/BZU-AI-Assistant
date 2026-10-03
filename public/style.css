@@ -3496,3 +3496,107 @@ body.dark .close-modal:hover{
     border-radius: 50%;
     background: #fff;
 }
+
+/* Home-screen-only polish: developer credit, suggestion buttons, and compact footer. */
+.welcome-credit {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    width: min(100%, 440px);
+    margin: 25px auto 0;
+    padding: 13px 16px;
+    border: 1px solid var(--border);
+    border-radius: 15px;
+    background: var(--card);
+    box-shadow: 0 5px 18px rgba(15, 23, 42, .06);
+    text-align: left;
+}
+
+.welcome-developer-avatar {
+    display: grid;
+    width: 42px;
+    height: 42px;
+    flex: 0 0 42px;
+    place-items: center;
+    border: 1px solid rgba(37, 99, 235, .14);
+    border-radius: 50%;
+    background: #eff6ff;
+    color: #2563eb;
+    font-size: 13px;
+    font-weight: 750;
+    letter-spacing: .02em;
+}
+
+.welcome-developer-details {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.welcome-developer-label {
+    color: var(--text-light);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .1em;
+}
+
+.welcome-developer-name {
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.welcome-developer-study {
+    color: var(--text-light);
+    font-size: 10px;
+    line-height: 1.4;
+}
+
+.quick-buttons {
+    gap: 10px;
+    margin-top: 18px;
+}
+
+.quick-btn {
+    min-height: 40px;
+    padding: 8px 15px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--card);
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 550;
+    box-shadow: 0 2px 7px rgba(15, 23, 42, .045);
+    transition: border-color .18s ease, background .18s ease, color .18s ease, transform .18s ease;
+}
+
+.quick-btn:hover {
+    transform: translateY(-1px);
+    border-color: rgba(37, 99, 235, .35);
+    background: rgba(37, 99, 235, .06);
+    color: var(--primary);
+}
+
+.footer-note {
+    margin-top: 6px;
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+@media (max-width: 500px) {
+    .welcome-credit {
+        width: min(100%, 360px);
+        margin-top: 17px;
+        padding: 11px 13px;
+    }
+
+    .welcome-developer-avatar {
+        width: 38px;
+        height: 38px;
+        flex-basis: 38px;
+    }
+
+    .quick-buttons { gap: 7px; }
+    .quick-btn { min-height: 36px; padding: 7px 11px; font-size: 11px; }
+}
