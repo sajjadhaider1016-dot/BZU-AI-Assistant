@@ -2665,12 +2665,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const signupMessage =
         document.getElementById("signupMessage");
 
-    const recoveryForm = document.getElementById("recoveryForm");
-    const resetPasswordPanel = document.getElementById("resetPasswordPanel");
-    const forgotPasswordForm = document.getElementById("forgotPasswordForm");
-    const resetPasswordForm = document.getElementById("resetPasswordForm");
-    const resendVerificationBtn = document.getElementById("resendVerificationBtn");
-
 
     // -----------------------------------------------
     // SWITCH LOGIN / SIGNUP
@@ -2680,8 +2674,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
         loginForm.style.display = "none";
         signupForm.style.display = "block";
-        recoveryForm.style.display = "none";
-        resetPasswordPanel.style.display = "none";
 
         loginMessage.textContent = "";
     });
@@ -2691,8 +2683,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
         signupForm.style.display = "none";
         loginForm.style.display = "block";
-        recoveryForm.style.display = "none";
-        resetPasswordPanel.style.display = "none";
 
         signupMessage.textContent = "";
     });
@@ -2709,126 +2699,6 @@ document.addEventListener("DOMContentLoaded", () => {
         renderHistory();
         authScreen.style.display = "none";
         restoreLastChat();
-    }
-
-    document.getElementById("forgotPasswordBtn")?.addEventListener("click", () => {
-        loginForm.style.display = "none";
-        signupForm.style.display = "none";
-        recoveryForm.style.display = "block";
-        resetPasswordPanel.style.display = "none";
-        const emailInput = document.getElementById("forgotPasswordEmail");
-        emailInput.value = document.getElementById("loginEmail").value.trim();
-        document.getElementById("forgotPasswordMessage").textContent = "";
-    });
-
-    document.getElementById("recoveryBackToLogin")?.addEventListener("click", () => {
-        recoveryForm.style.display = "none";
-        loginForm.style.display = "block";
-    });
-
-    document.getElementById("resetBackToLogin")?.addEventListener("click", () => {
-        resetPasswordPanel.style.display = "none";
-        loginForm.style.display = "block";
-        const url = new URL(window.location.href);
-        url.searchParams.delete("resetToken");
-        history.replaceState({}, "", url);
-    });
-
-    forgotPasswordForm?.addEventListener("submit", async event => {
-        event.preventDefault();
-        const message = document.getElementById("forgotPasswordMessage");
-        message.textContent = "Sending reset link…";
-        try {
-            const response = await fetch("/api/auth/forgot-password", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                credentials: "include",
-                body: JSON.stringify({ email: document.getElementById("forgotPasswordEmail").value.trim() })
-            });
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.message || "Could not send the reset link.");
-            message.textContent = data.message;
-        } catch (error) {
-            message.textContent = error.message;
-        }
-    });
-
-    resetPasswordForm?.addEventListener("submit", async event => {
-        event.preventDefault();
-        const message = document.getElementById("resetPasswordMessage");
-        message.textContent = "Updating password…";
-        const url = new URL(window.location.href);
-        try {
-            const response = await fetch("/api/auth/reset-password", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                credentials: "include",
-                body: JSON.stringify({
-                    token: url.searchParams.get("resetToken"),
-                    password: document.getElementById("newPassword").value
-                })
-            });
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.message || "Could not reset the password.");
-            message.textContent = data.message;
-            resetPasswordForm.reset();
-            url.searchParams.delete("resetToken");
-            history.replaceState({}, "", url);
-            setTimeout(() => {
-                resetPasswordPanel.style.display = "none";
-                loginForm.style.display = "block";
-                document.getElementById("loginMessage").textContent = "Password updated. Sign in with your new password.";
-            }, 900);
-        } catch (error) {
-            message.textContent = error.message;
-        }
-    });
-
-    resendVerificationBtn?.addEventListener("click", async () => {
-        const email = document.getElementById("loginEmail").value.trim();
-        loginMessage.textContent = "Sending a new verification link…";
-        try {
-            const response = await fetch("/api/auth/resend-verification", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                credentials: "include",
-                body: JSON.stringify({ email })
-            });
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.message || "Could not send a verification link.");
-            loginMessage.textContent = data.message;
-        } catch (error) {
-            loginMessage.textContent = error.message;
-        }
-    });
-
-    const authUrl = new URL(window.location.href);
-    const resetToken = authUrl.searchParams.get("resetToken");
-    if (resetToken) {
-        loginForm.style.display = "none";
-        signupForm.style.display = "none";
-        recoveryForm.style.display = "none";
-        resetPasswordPanel.style.display = "block";
-    }
-    if (authUrl.searchParams.get("verified") === "1") {
-        loginMessage.textContent = "Email verified. You can now sign in.";
-        authUrl.searchParams.delete("verified");
-        history.replaceState({}, "", authUrl);
-    } else if (authUrl.searchParams.has("verified")) {
-        loginMessage.textContent = "That verification link is invalid or expired. Request a new one below.";
-        resendVerificationBtn.style.display = "inline-block";
-        authUrl.searchParams.delete("verified");
-        history.replaceState({}, "", authUrl);
-    }
-    if (authUrl.searchParams.has("authError")) {
-        const errorCode = authUrl.searchParams.get("authError");
-        loginMessage.textContent = errorCode === "google_cancelled"
-            ? "Google sign-in was cancelled."
-            : errorCode === "google_unconfigured"
-                ? "Google sign-in is not configured by the administrator yet."
-                : "Google sign-in could not be completed. Please try again or use email and password.";
-        authUrl.searchParams.delete("authError");
-        history.replaceState({}, "", authUrl);
     }
 
     loginFormElement?.addEventListener("submit", async (event) => {
@@ -2865,25 +2735,17 @@ document.addEventListener("DOMContentLoaded", () => {
             const data = await response.json();
 
             if (!response.ok) {
-                const loginError = new Error(data.message || "Login failed.");
-                loginError.code = data.code;
-                throw loginError;
+                throw new Error(data.message || "Login failed.");
             }
 
             authStateRevision++;
             loginMessage.textContent = "Login successful.";
-            resendVerificationBtn.style.display = "none";
             await showAuthenticatedApp();
 
         } catch (error) {
 
             loginMessage.textContent =
                 error.message;
-            const submittedEmail = document.getElementById("loginEmail").value.trim();
-            if (submittedEmail) document.getElementById("forgotPasswordEmail").value = submittedEmail;
-            if (error.code === "EMAIL_NOT_VERIFIED") {
-                resendVerificationBtn.style.display = "inline-block";
-            }
 
         }
 
@@ -2933,35 +2795,17 @@ document.addEventListener("DOMContentLoaded", () => {
             const data = await response.json();
 
             if (!response.ok) {
-                const signupError = new Error(data.message || "Signup failed.");
-                signupError.code = data.code;
-                throw signupError;
+                throw new Error(data.message || "Signup failed.");
             }
 
             authStateRevision++;
-            if (data.verificationRequired) {
-                signupMessage.textContent = data.message;
-                document.getElementById("loginEmail").value = email.trim();
-                signupForm.style.display = "none";
-                loginForm.style.display = "block";
-                loginMessage.textContent = "Check your inbox and verify your email before signing in.";
-                resendVerificationBtn.style.display = "inline-block";
-            } else {
-                signupMessage.textContent = "Account created successfully.";
-                await showAuthenticatedApp();
-            }
+            signupMessage.textContent = "Account created successfully.";
+            await showAuthenticatedApp();
 
         } catch (error) {
 
             signupMessage.textContent =
                 error.message;
-            if (error.code === "VERIFICATION_EMAIL_SEND_FAILED") {
-                document.getElementById("loginEmail").value = email.trim();
-                signupForm.style.display = "none";
-                loginForm.style.display = "block";
-                loginMessage.textContent = "Your account exists but still needs verification. Send the verification email again to continue.";
-                resendVerificationBtn.style.display = "inline-block";
-            }
 
         }
 
