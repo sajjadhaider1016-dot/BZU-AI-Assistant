@@ -9,7 +9,7 @@
     <title>BZU AI Assistant | Developed by Sajjad Haider</title>
 
     <link rel="icon" type="image/png" href="/images/bzu-logo.png">
-    <link rel="stylesheet" href="style.css?v=20261003-chatgpt-style-v2">
+    <link rel="stylesheet" href="style.css?v=20260930-about-features-stack">
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -204,8 +204,7 @@
 
         <div id="history" class="history"></div>
 
-        <div class="sidebar-section-label">Workspace</div>
-        <div class="sidebar-bottom">
+       <div class="sidebar-bottom">
 
     <button id="settingsBtn">
         <i class="fa-solid fa-gear"></i>
@@ -229,13 +228,19 @@
 
 </div>
         <div class="developer-card">
-            <div class="developer-avatar" aria-hidden="true">SH</div>
-            <div class="developer-details">
-                <span class="developer-kicker">DESIGNED &amp; BUILT BY</span>
-                <h3>Sajjad Haider</h3>
-                <p>BS Artificial Intelligence</p>
-                <span>Bahauddin Zakariya University</span>
+
+            <div class="developer-avatar">
+
+                SH
+
             </div>
+
+            <h3>Sajjad Haider</h3>
+
+            <p>BS Artificial Intelligence</p>
+
+            <span>Bahauddin Zakariya University</span>
+
         </div>
 
     </aside>
@@ -295,11 +300,19 @@
         </div>
 
 
-        <h2>What can I help you with?</h2>
+        <h2>
+            Welcome to BZU AI Assistant
+        </h2>
 
 
         <p>
-            Ask a question, upload a file, or create something.
+            Your intelligent university assistant.
+            <br><br>
+
+            Ask anything about admissions, fee structure,
+            departments, hostels, transport,
+            scholarships, LMS, notices,
+            semester rules and much more.
         </p>
 
 
@@ -341,6 +354,28 @@
 
         </div>
 
+
+        <!-- Developer Credit -->
+
+        <div class="welcome-credit">
+
+            <h3>
+                Designed &amp; Developed by
+            </h3>
+
+            <h2>
+                Sajjad Haider
+            </h2>
+
+            <p>
+                BS Artificial Intelligence Student
+            </p>
+
+            <span>
+                Bahauddin Zakariya University
+            </span>
+
+        </div>
 
     </section>
         <!-- =========================================
@@ -467,7 +502,7 @@
                     <textarea
                         id="messageInput"
                         rows="1"
-                        placeholder="Message BZU AI..."></textarea>
+                        placeholder="Ask anything about BZU..."></textarea>
 
                     <!-- Send -->
 
@@ -483,7 +518,16 @@
                 </div>
 
                 <div class="footer-note">
-                    AI can make mistakes. Verify important university information. Image generation uses shared free monthly credits.
+
+                    AI can make mistakes.
+                    Please verify important university
+                    information before relying on the response.
+
+                    <br>
+
+                    Image generation uses the app's shared free monthly Hugging Face credits;
+                    it may pause when the shared allowance runs out.
+
                 </div>
 
             </footer>
@@ -648,24 +692,51 @@
                 <div class="about-brand">
                     <img class="about-brand-logo" src="/images/bzu-logo.png" alt="Bahauddin Zakariya University seal">
                     <div class="about-brand-copy">
-                        <p class="about-eyebrow">STUDENT PROJECT</p>
+                        <p class="about-eyebrow">STUDENT-DEVELOPED ASSISTANT</p>
                         <h3>BZU AI Assistant</h3>
-                        <p>A conversational assistant for university information and everyday questions.</p>
+                        <p>An independent assistant for BZU-related information and general questions.</p>
                     </div>
                 </div>
 
-                <section class="about-developer" aria-labelledby="aboutDeveloperTitle">
-                    <span class="about-fact-icon"><i class="fa-solid fa-user-graduate" aria-hidden="true"></i></span>
-                    <div>
-                        <h4 id="aboutDeveloperTitle">Developer</h4>
-                        <p><strong>Sajjad Haider</strong><br>BS Artificial Intelligence · Bahauddin Zakariya University</p>
+                <div class="about-disclaimer">
+                    <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+                    <p>This is an independent student project. It is not an official BZU website or service. Please verify important university information with the university.</p>
+                </div>
+
+                <div class="about-facts">
+                    <section class="about-fact">
+                        <span class="about-fact-icon"><i class="fa-solid fa-user-graduate" aria-hidden="true"></i></span>
+                        <div><h4>Project developer</h4><p><strong>Sajjad Haider</strong><br>BS Artificial Intelligence student<br>Bahauddin Zakariya University, Multan</p></div>
+                    </section>
+                    <section class="about-fact">
+                        <span class="about-fact-icon"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i></span>
+                        <div><h4>AI features</h4><p>Text responses are powered by Groq. Image generation and image editing use Hugging Face when a supported service is available; usage can depend on provider availability and free quotas.</p></div>
+                    </section>
+                    <section class="about-fact">
+                        <span class="about-fact-icon"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i></span>
+                        <div><h4>Your experience</h4><p>Voice input uses supported browser speech features. Chat history is saved in this browser, while generated images and files are available through your account.</p></div>
+                    </section>
+                </div>
+
+                <section class="about-features" aria-labelledby="aboutFeaturesTitle">
+                    <h4 id="aboutFeaturesTitle">Features</h4>
+                    <div class="about-feature-list">
+                        <span><i class="fa-solid fa-microphone" aria-hidden="true"></i> Voice chat</span>
+                        <span><i class="fa-solid fa-image" aria-hidden="true"></i> Image creation and editing</span>
+                        <span><i class="fa-solid fa-paperclip" aria-hidden="true"></i> File upload and editing</span>
+                        <span><i class="fa-solid fa-download" aria-hidden="true"></i> File downloads</span>
+                        <span><i class="fa-solid fa-images" aria-hidden="true"></i> Image library</span>
+                        <span><i class="fa-solid fa-comments" aria-hidden="true"></i> Chat history</span>
+                        <span><i class="fa-solid fa-moon" aria-hidden="true"></i> Dark mode</span>
                     </div>
                 </section>
 
                 <section class="about-stack" aria-labelledby="aboutStackTitle">
                     <div class="about-stack-heading">
                         <span class="about-fact-icon"><i class="fa-solid fa-layer-group" aria-hidden="true"></i></span>
-                        <h4 id="aboutStackTitle">Technology stack</h4>
+                        <div>
+                            <h4 id="aboutStackTitle">Technology stack</h4>
+                        </div>
                     </div>
                     <div class="about-stack-grid">
                         <article class="about-stack-card">
@@ -676,8 +747,14 @@
                             <h5><i class="fa-solid fa-server" aria-hidden="true"></i> Backend</h5>
                             <p>Node.js · Express · Prisma · SQLite · bcryptjs</p>
                         </article>
+                        <article class="about-stack-card">
+                            <h5><i class="fa-solid fa-plug" aria-hidden="true"></i> AI and file tools</h5>
+                            <p>Groq · Hugging Face · PDFKit · docx · ExcelJS · PptxGenJS</p>
+                        </article>
                     </div>
                 </section>
+
+                <p class="about-footer">Built as a student project to make AI assistance easier to access.</p>
             </div>
 
         </div>
