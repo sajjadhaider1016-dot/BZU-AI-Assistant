@@ -894,7 +894,7 @@ function renderPendingAttachment() {
     pendingAttachmentPreview.hidden = !pendingUploadFile;
     messageInput.placeholder = pendingUploadFile
         ? "Tell me what to do with this file..."
-        : "Ask anything about BZU...";
+        : "What's on your mind?";
     if (!pendingUploadFile) return;
 
     const icon = document.createElement("i");
