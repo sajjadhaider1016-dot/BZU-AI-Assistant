@@ -3396,6 +3396,66 @@ body.dark .close-modal:hover{
     text-decoration: underline;
 }
 
+.auth-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 20px 0;
+    color: #94a3b8;
+    font-size: 13px;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: rgba(148, 163, 184, .24);
+}
+
+.auth-google-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 48px;
+    box-sizing: border-box;
+    border: 1px solid rgba(148, 163, 184, .32);
+    border-radius: 12px;
+    color: #e8eef9;
+    background: rgba(255, 255, 255, .04);
+    text-decoration: none;
+    font-weight: 650;
+    transition: background .18s ease, border-color .18s ease, transform .18s ease;
+}
+
+.auth-google-button:hover {
+    background: rgba(255, 255, 255, .09);
+    border-color: rgba(148, 163, 184, .58);
+    transform: translateY(-1px);
+}
+
+.auth-link-button,
+#forgotPasswordBtn {
+    border: 0;
+    padding: 8px 0;
+    color: #93c5fd;
+    background: transparent;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.auth-link-button:hover,
+#forgotPasswordBtn:hover {
+    color: #bfdbfe;
+    text-decoration: underline;
+}
+
+.auth-forgot {
+    margin-top: 10px;
+}
+
 
 /* ================= FOOTER ================= */
 

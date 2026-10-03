@@ -78,7 +78,14 @@
 
                 <div id="loginMessage" class="auth-message"></div>
 
+                <button type="button" id="resendVerificationBtn" class="auth-link-button" style="display:none;">Resend verification email</button>
+
             </form>
+
+            <div class="auth-divider"><span>or</span></div>
+            <a class="auth-google-button" href="/api/auth/google">Continue with Google</a>
+
+            <p class="auth-switch auth-forgot"><button type="button" id="forgotPasswordBtn">Forgot your password?</button></p>
 
             <p class="auth-switch">
                 Don't have an account?
@@ -126,8 +133,8 @@
                     <input
                         type="password"
                         id="signupPassword"
-                        placeholder="Minimum 6 characters"
-                        minlength="6"
+                        placeholder="Minimum 8 characters"
+                        minlength="8"
                         required
                     >
                 </div>
@@ -140,6 +147,9 @@
 
             </form>
 
+            <div class="auth-divider"><span>or</span></div>
+            <a class="auth-google-button" href="/api/auth/google">Sign up with Google</a>
+
             <p class="auth-switch">
                 Already have an account?
                 <button type="button" id="showLogin">
@@ -147,6 +157,38 @@
                 </button>
             </p>
 
+        </div>
+
+        <div id="recoveryForm" style="display:none;">
+            <div class="auth-heading">
+                <h2>Reset your password</h2>
+                <p>We’ll email you a secure link if an account exists for that address.</p>
+            </div>
+            <form id="forgotPasswordForm">
+                <div class="auth-field">
+                    <label for="forgotPasswordEmail">Email</label>
+                    <input type="email" id="forgotPasswordEmail" placeholder="you@example.com" required>
+                </div>
+                <button type="submit" class="auth-submit">Send reset link</button>
+                <div id="forgotPasswordMessage" class="auth-message" aria-live="polite"></div>
+            </form>
+            <p class="auth-switch"><button type="button" id="recoveryBackToLogin">Back to sign in</button></p>
+        </div>
+
+        <div id="resetPasswordPanel" style="display:none;">
+            <div class="auth-heading">
+                <h2>Choose a new password</h2>
+                <p>Use at least 8 characters.</p>
+            </div>
+            <form id="resetPasswordForm">
+                <div class="auth-field">
+                    <label for="newPassword">New password</label>
+                    <input type="password" id="newPassword" minlength="8" autocomplete="new-password" required>
+                </div>
+                <button type="submit" class="auth-submit">Update password</button>
+                <div id="resetPasswordMessage" class="auth-message" aria-live="polite"></div>
+            </form>
+            <p class="auth-switch"><button type="button" id="resetBackToLogin">Back to sign in</button></p>
         </div>
 
         <div class="auth-footer">
