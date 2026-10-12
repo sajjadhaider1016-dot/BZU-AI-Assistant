@@ -9,3 +9,6 @@ prisma/dev.db
 .agents/
 data/
 .ui-refresh-backup/
+/generated/
+.vercel
+.env*

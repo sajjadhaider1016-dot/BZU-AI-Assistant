@@ -8,7 +8,7 @@ require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
-const session = require("express-session");
+const session = require("cookie-session");
 const bcrypt = require("bcryptjs");
 const prisma = require("./lib/prisma");
 async function saveUserMemory(userId, content) {
@@ -58,6 +58,7 @@ const JSZip = require("jszip");
 
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 
 const memoryService = require("./memoryService");
 const { searchKnowledge } = require("./searchService");
@@ -67,14 +68,16 @@ const authRoutes = require("./auth");
 // ======================================================
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: "4mb" }));
 app.use(express.urlencoded({ extended: true }));
 // ======================================================
 // DIRECTORIES
 // ======================================================
 
-const uploadsDirectory = path.join(__dirname, "uploads");
-const dataDirectory = process.env.RAILWAY_VOLUME_MOUNT_PATH || path.join(__dirname, "data");
+const dataDirectory = process.env.VERCEL
+    ? path.join("/tmp", "bzu-ai")
+    : process.env.RAILWAY_VOLUME_MOUNT_PATH || path.join(__dirname, "data");
+const uploadsDirectory = path.join(dataDirectory, "uploads");
 
 if (!fs.existsSync(uploadsDirectory)) {
     fs.mkdirSync(uploadsDirectory, { recursive: true });
@@ -116,24 +119,86 @@ app.use(
 // SESSION
 // ======================================================
 
-app.use(
-    session({
-        secret:
-            process.env.SESSION_SECRET ||
-            "bzu-ai-development-secret",
+if (process.env.VERCEL && !process.env.SESSION_SECRET) {
+    throw new Error("SESSION_SECRET must be set in Vercel Environment Variables.");
+}
+app.set("trust proxy", 1);
+app.use(session({
+    name: "bzu_session",
+    keys: [process.env.SESSION_SECRET || "bzu-ai-local-development-secret"],
+    maxAge: 1000 * 60 * 60 * 24 * 7,
+    httpOnly: true,
+    secure: Boolean(process.env.VERCEL),
+    sameSite: "lax",
+    path: "/"
+}));
 
-        resave: false,
+// One-time, authenticated data migration endpoint for the Railway-to-Vercel move.
+// Remove this route after the existing local accounts and chats have been imported.
+app.post("/api/internal/import-local-data", async (req, res) => {
+    const expectedKey = String(process.env.SESSION_SECRET || "");
+    const providedKey = String(req.get("x-local-migration-key") || "");
+    const expectedBuffer = Buffer.from(expectedKey);
+    const providedBuffer = Buffer.from(providedKey);
+    if (!expectedKey || expectedBuffer.length !== providedBuffer.length
+        || !crypto.timingSafeEqual(expectedBuffer, providedBuffer)) {
+        return res.status(404).json({ success: false, message: "Not found." });
+    }
 
-        saveUninitialized: false,
+    const tables = ["users", "conversations", "messages", "memories"];
+    const payload = req.body || {};
+    if (tables.some(table => !Array.isArray(payload[table]))) {
+        return res.status(400).json({ success: false, message: "Invalid migration payload." });
+    }
+    const { users, conversations, messages, memories } = payload;
+    const expectedCounts = { users: users.length, conversations: conversations.length, messages: messages.length, memories: memories.length };
+    if (users.length > 100 || conversations.length > 1000 || messages.length > 10000 || memories.length > 1000) {
+        return res.status(413).json({ success: false, message: "Migration payload is larger than allowed." });
+    }
 
-        cookie: {
-            httpOnly: true,
-            secure: false,
-            sameSite: "lax",
-            maxAge: 1000 * 60 * 60 * 24 * 7
+    try {
+        const currentCounts = await Promise.all([
+            prisma.user.count(), prisma.conversation.count(), prisma.message.count(), prisma.memory.count()
+        ]);
+        const actualCounts = { users: currentCounts[0], conversations: currentCounts[1], messages: currentCounts[2], memories: currentCounts[3] };
+        if (Object.values(actualCounts).some(count => count > 0)) {
+            const alreadyImported = Object.keys(expectedCounts).every(key => actualCounts[key] === expectedCounts[key]);
+            if (alreadyImported) return res.json({ success: true, alreadyImported: true, counts: actualCounts });
+            return res.status(409).json({ success: false, message: "The destination database is not empty; migration stopped to protect existing data." });
         }
-    })
-);
+
+        const asDate = value => value instanceof Date ? value : new Date(value);
+        await prisma.$transaction(async tx => {
+            if (users.length) await tx.user.createMany({ data: users.map(row => ({
+                id: String(row.id), name: String(row.name), email: String(row.email), passwordHash: String(row.passwordHash),
+                emailVerified: Boolean(row.emailVerified), createdAt: asDate(row.createdAt), updatedAt: asDate(row.updatedAt)
+            })) });
+            if (conversations.length) await tx.conversation.createMany({ data: conversations.map(row => ({
+                id: String(row.id), title: String(row.title || "New Chat"), userId: String(row.userId),
+                createdAt: asDate(row.createdAt), updatedAt: asDate(row.updatedAt)
+            })) });
+            if (messages.length) await tx.message.createMany({ data: messages.map(row => ({
+                id: String(row.id), conversationId: String(row.conversationId), role: String(row.role),
+                content: String(row.content), createdAt: asDate(row.createdAt)
+            })) });
+            if (memories.length) await tx.memory.createMany({ data: memories.map(row => ({
+                id: String(row.id), userId: String(row.userId), content: String(row.content), createdAt: asDate(row.createdAt)
+            })) });
+        });
+
+        const importedCounts = await Promise.all([
+            prisma.user.count(), prisma.conversation.count(), prisma.message.count(), prisma.memory.count()
+        ]);
+        const counts = { users: importedCounts[0], conversations: importedCounts[1], messages: importedCounts[2], memories: importedCounts[3] };
+        const complete = Object.keys(expectedCounts).every(key => counts[key] === expectedCounts[key]);
+        if (!complete) return res.status(500).json({ success: false, message: "Migration completed with a count mismatch.", counts });
+        return res.json({ success: true, counts });
+    } catch (error) {
+        console.error("LOCAL DATA IMPORT ERROR:", error?.message || error);
+        return res.status(500).json({ success: false, message: "Could not import the local database." });
+    }
+});
+
 app.use("/api/auth", authRoutes);
 
 app.use(
@@ -3136,85 +3201,90 @@ app.use(
 const PORT =
     process.env.PORT || 3000;
 
-app.listen(
-    PORT,
-    () => {
+if (!process.env.VERCEL) {
+    app.listen(
+        PORT,
+        () => {
 
-        console.clear();
+            console.clear();
 
-        console.log(
-            "===================================================="
-        );
+            console.log(
+                "===================================================="
+            );
 
-        console.log(
-            "🧠 BZU AI Assistant v6.0"
-        );
+            console.log(
+                "🧠 BZU AI Assistant v6.0"
+            );
 
-        console.log(
-            "===================================================="
-        );
+            console.log(
+                "===================================================="
+            );
 
-        console.log(
-            `🚀 Server      : http://localhost:${PORT}`
-        );
+            console.log(
+                `🚀 Server      : http://localhost:${PORT}`
+            );
 
-        console.log(
-            "🤖 AI Engine   : Groq"
-        );
+            console.log(
+                "🤖 AI Engine   : Groq"
+            );
 
-        console.log(
-            `🧠 Model       : ${AI_MODEL}`
-        );
+            console.log(
+                `🧠 Model       : ${AI_MODEL}`
+            );
 
-        console.log(
-            "📚 Knowledge   : Enabled"
-        );
+            console.log(
+                "📚 Knowledge   : Enabled"
+            );
 
-        console.log(
-            "📄 PDF Upload  : Enabled"
-        );
+            console.log(
+                "📄 PDF Upload  : Enabled"
+            );
 
-        console.log(
-            "📘 DOCX Upload : Enabled"
-        );
+            console.log(
+                "📘 DOCX Upload : Enabled"
+            );
 
-        console.log(
-            "📊 PPT/PPTX Upload : Enabled"
-        );
+            console.log(
+                "📊 PPT/PPTX Upload : Enabled"
+            );
 
-        console.log(
-            "📑 TXT Upload  : Enabled"
-        );
+            console.log(
+                "📑 TXT Upload  : Enabled"
+            );
 
-        console.log(
-            "🖼️ OCR Images  : Enabled"
-        );
+            console.log(
+                "🖼️ OCR Images  : Enabled"
+            );
 
-        console.log(
-            "👨‍💻 Developer   : Sajjad Haider"
-        );
+            console.log(
+                "👨‍💻 Developer   : Sajjad Haider"
+            );
 
-        console.log(
-            "🌐 Portfolio   : https://recoveriest.com"
-        );
+            console.log(
+                "🌐 Portfolio   : https://recoveriest.com"
+            );
 
-        console.log(
-            "🏫 Version     : 6.0"
-        );
+            console.log(
+                "🏫 Version     : 6.0"
+            );
 
-        console.log(
-            "===================================================="
-        );
+            console.log(
+                "===================================================="
+            );
 
-        console.log(
-            "✅ Server Started Successfully"
-        );
+            console.log(
+                "✅ Server Started Successfully"
+            );
 
-        console.log(
-            "===================================================="
-        );
-    });
+            console.log(
+                "===================================================="
+            );
+        });
 
-// ======================================================
+    // ======================================================
+}
+
+module.exports = app;
+
 // END SERVER.JS
 // ======================================================
