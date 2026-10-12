@@ -296,8 +296,7 @@ app.post("/api/generate-image", async (req, res) => {
     try {
         const imageBuffer = await runCloudflareImageModel(CLOUDFLARE_IMAGE_MODEL, {
             prompt,
-            steps: 4,
-            seed: crypto.randomInt(1, 2147483647)
+            steps: 4
         });
         const userDirectory = path.join(generatedImagesDirectory, String(req.session.userId));
         fs.mkdirSync(userDirectory, { recursive: true });
