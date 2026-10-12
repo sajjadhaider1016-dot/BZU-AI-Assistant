@@ -263,7 +263,14 @@ app.post("/api/generate-image", async (req, res) => {
         return res.json({ imageUrl: `/api/generated-images/${encodeURIComponent(filename)}` });
     } catch (error) {
         console.error("IMAGE GENERATION ERROR:", error?.message || error);
-        return res.status(502).json({ message: "Image generation failed. The provider may be busy or your shared free credits may be used up." });
+        const providerMessage = String(error?.message || "");
+        if (/no remaining credits|insufficient credits|credit balance/i.test(providerMessage)) {
+            return res.status(402).json({
+                code: "IMAGE_CREDITS_EXHAUSTED",
+                message: "Image generation is unavailable because the configured Hugging Face account has no inference credits remaining. The app will not charge you. An administrator must add a provider with available quota before image generation can resume."
+            });
+        }
+        return res.status(502).json({ message: "Image generation failed because the configured provider did not complete the request. Please try again later." });
     }
 });
 

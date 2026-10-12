@@ -662,7 +662,7 @@ async function generateImage(promptValue = null, originalUserText = "") {
         saveCurrentChat();
     } finally {
         imageGenerateBtn.disabled = false;
-        imageGenerateBtn.title = "Generate an image using the shared free allowance";
+        imageGenerateBtn.title = "Generate an image using the configured provider";
         isTyping = false;
         if (voiceMode) resumeVoiceListening();
     }
