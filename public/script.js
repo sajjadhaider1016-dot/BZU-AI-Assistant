@@ -2665,6 +2665,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const signupMessage =
         document.getElementById("signupMessage");
+    const signupEmailInput = document.getElementById("signupEmail");
 
 
     // -----------------------------------------------
@@ -2686,6 +2687,12 @@ document.addEventListener("DOMContentLoaded", () => {
         loginForm.style.display = "block";
 
         signupMessage.textContent = "";
+    });
+
+    // Remove stale server feedback while the user corrects the email.
+    signupEmailInput?.addEventListener("input", () => {
+        signupMessage.textContent = "";
+        signupMessage.classList.remove("error", "success");
     });
 
 
@@ -2764,14 +2771,14 @@ document.addEventListener("DOMContentLoaded", () => {
         const name =
             document.getElementById("signupName").value;
 
-        const email =
-            document.getElementById("signupEmail").value;
+        const email = signupEmailInput.value.trim().toLowerCase();
 
         const password =
             document.getElementById("signupPassword").value;
 
         signupMessage.textContent =
             "Creating account...";
+        signupMessage.classList.remove("error", "success");
 
         try {
 
@@ -2796,6 +2803,14 @@ document.addEventListener("DOMContentLoaded", () => {
             const data = await response.json();
 
             if (!response.ok) {
+                if (data.code === "EMAIL_EXISTS") {
+                    document.getElementById("loginEmail").value = email;
+                    signupForm.style.display = "none";
+                    loginForm.style.display = "block";
+                    loginMessage.textContent = data.message;
+                    loginMessage.classList.add("error");
+                    return;
+                }
                 throw new Error(data.message || "Signup failed.");
             }
 
@@ -2807,6 +2822,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             signupMessage.textContent =
                 error.message;
+            signupMessage.classList.add("error");
 
         }
 

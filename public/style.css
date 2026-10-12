@@ -3361,6 +3361,14 @@ body.dark .close-modal:hover{
     line-height: 1.4;
 }
 
+.auth-message.error {
+    color: #f87171;
+}
+
+.auth-message.success {
+    color: #34d399;
+}
+
 
 /* ================= LOGIN / SIGNUP SWITCH ================= */
 

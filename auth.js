@@ -21,9 +21,13 @@ router.post("/signup", async (req, res) => {
         const email = String(req.body?.email || "").trim().toLowerCase();
         const password = String(req.body?.password || "");
         if (!name || !email || !password) return res.status(400).json({ success: false, message: "Name, email and password are required." });
+        // Keep API validation aligned with the browser's type=email constraint.
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            return res.status(400).json({ success: false, code: "INVALID_EMAIL", message: "Enter a valid email address, such as name@example.com." });
+        }
         if (password.length < 8) return res.status(400).json({ success: false, message: "Password must be at least 8 characters." });
         const existingUser = await prisma.user.findUnique({ where: { email } });
-        if (existingUser) return res.status(409).json({ success: false, message: "An account with this email already exists. Please sign in." });
+        if (existingUser) return res.status(409).json({ success: false, code: "EMAIL_EXISTS", message: "This email is already registered. Sign in to your existing account." });
         const user = await prisma.user.create({
             data: { name, email, passwordHash: await bcrypt.hash(password, 12), emailVerified: true }
         });
