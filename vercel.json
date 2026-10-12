@@ -1,0 +1,25 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "outputDirectory": "public",
+  "installCommand": "echo Static frontend does not need package installation",
+  "buildCommand": "echo Serving the existing public files",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://bzu-ai-assistant-production-8cc9.up.railway.app/api/:path*"
+    },
+    {
+      "source": "/chat",
+      "destination": "https://bzu-ai-assistant-production-8cc9.up.railway.app/chat"
+    },
+    {
+      "source": "/upload",
+      "destination": "https://bzu-ai-assistant-production-8cc9.up.railway.app/upload"
+    },
+    {
+      "source": "/",
+      "destination": "/CHATBOT.html"
+    }
+  ]
+}
