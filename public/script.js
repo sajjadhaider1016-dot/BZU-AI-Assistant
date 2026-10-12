@@ -413,7 +413,8 @@ function createMessage(type, text, extra = {}) {
         if (!Array.isArray(extra.fileDownloads) || !extra.fileDownloads.length) {
             const downloadLink = document.createElement("a");
             downloadLink.href = extra.imageUrl;
-            downloadLink.download = extra.imageFilename || "bzu-ai-generated-image.png";
+            const extension = String(extra.imageUrl).match(/\.(png|jpe?g)(?:[?#]|$)/i)?.[1]?.toLowerCase() || "png";
+            downloadLink.download = extra.imageFilename || `bzu-ai-generated-image.${extension}`;
             downloadLink.className = "generated-image-download";
             downloadLink.textContent = "Download image";
             downloadLink.setAttribute("aria-label", "Download generated image");
@@ -635,7 +636,8 @@ async function generateImage(promptValue = null, originalUserText = "") {
         stage.appendChild(image);
         const downloadLink = document.createElement("a");
         downloadLink.href = data.imageUrl;
-        downloadLink.download = "bzu-ai-generated-image.png";
+        const extension = String(data.imageUrl).match(/\.(png|jpe?g)(?:[?#]|$)/i)?.[1]?.toLowerCase() || "png";
+        downloadLink.download = `bzu-ai-generated-image.${extension}`;
         downloadLink.className = "generated-image-download";
         downloadLink.textContent = "Download image";
         downloadLink.setAttribute("aria-label", "Download generated image");
@@ -662,7 +664,7 @@ async function generateImage(promptValue = null, originalUserText = "") {
         saveCurrentChat();
     } finally {
         imageGenerateBtn.disabled = false;
-        imageGenerateBtn.title = "Generate an image using the configured provider";
+        imageGenerateBtn.title = "Generate an image with Cloudflare Workers AI";
         isTyping = false;
         if (voiceMode) resumeVoiceListening();
     }
@@ -744,7 +746,8 @@ async function openImageLibrary() {
             caption.textContent = item.prompt || "Generated image";
             const download = document.createElement("a");
             download.href = item.imageUrl;
-            download.download = "bzu-ai-generated-image.png";
+            const extension = String(item.imageUrl).match(/\.(png|jpe?g)(?:[?#]|$)/i)?.[1]?.toLowerCase() || "png";
+            download.download = `bzu-ai-generated-image.${extension}`;
             download.className = "generated-image-download";
             download.textContent = "Download";
             card.append(image, caption, download);

@@ -49,7 +49,6 @@ const { CanvasFactory } = require("pdf-parse/worker");
 const docstream = require("@jose.espana/docstream");
 const mammoth = require("mammoth");
 const Tesseract = require("tesseract.js");
-const { InferenceClient } = require("@huggingface/inference");
 const PDFDocument = require("pdfkit");
 const { Document, Packer, Paragraph, HeadingLevel } = require("docx");
 const ExcelJS = require("exceljs");
@@ -142,6 +141,58 @@ app.use(
 );
 
 const generatedImagesDirectory = path.join(dataDirectory, "generated-images");
+const CLOUDFLARE_IMAGE_MODEL = "@cf/black-forest-labs/flux-1-schnell";
+const CLOUDFLARE_IMAGE_EDIT_MODEL = "@cf/black-forest-labs/flux-2-klein-4b";
+
+async function runCloudflareImageModel(model, input) {
+    const accountId = String(process.env.CLOUDFLARE_ACCOUNT_ID || "").trim();
+    const apiToken = String(process.env.CLOUDFLARE_API_TOKEN || "").trim();
+    if (!accountId || !apiToken) {
+        const error = new Error("Image generation is not configured. Add CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN to the Vercel Production environment.");
+        error.code = "IMAGE_PROVIDER_NOT_CONFIGURED";
+        throw error;
+    }
+
+    const endpoint = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/ai/run/${encodeURIComponent(model).replace(/%2F/gi, "/").replace(/%40/gi, "@")}`;
+    const response = await axios.post(endpoint, input, {
+        headers: {
+            Authorization: `Bearer ${apiToken}`,
+            "Content-Type": "application/json"
+        },
+        timeout: 120000,
+        maxBodyLength: 12 * 1024 * 1024
+    });
+    const imageBase64 = response.data?.result?.image;
+    if (typeof imageBase64 !== "string" || !imageBase64.trim()) {
+        throw new Error("Cloudflare Workers AI returned no image data.");
+    }
+    return Buffer.from(imageBase64, "base64");
+}
+
+function getImageProviderFailure(error) {
+    const errors = error?.response?.data?.errors;
+    const providerMessage = Array.isArray(errors)
+        ? errors.map(item => item?.message).filter(Boolean).join(" ")
+        : String(error?.message || "");
+    console.error("CLOUDFLARE IMAGE ERROR:", providerMessage || "Unknown provider error");
+    if (/daily free allocation|limit.*exceed|neurons.*limit|quota/i.test(providerMessage)) {
+        return {
+            status: 429,
+            body: {
+                code: "IMAGE_DAILY_LIMIT_REACHED",
+                message: "The free daily image-generation allowance has been reached. Please try again after the daily reset."
+            }
+        };
+    }
+    if (error?.code === "IMAGE_PROVIDER_NOT_CONFIGURED") {
+        return { status: 503, body: { message: providerMessage } };
+    }
+    return {
+        status: 502,
+        body: { message: "Cloudflare could not complete image generation. Please try again in a moment." }
+    };
+}
+
 const officialBzuImagePages = [
     { url: "https://bzu.edu.pk/", label: "BZU Campus" },
     { url: "https://bzu.edu.pk/admin-positions.php", label: "BZU Administration Block" },
@@ -242,35 +293,24 @@ app.post("/api/generate-image", async (req, res) => {
     if (!prompt || prompt.length > 500) {
         return res.status(400).json({ message: "Enter an image description of up to 500 characters." });
     }
-    if (!process.env.HF_TOKEN) {
-        return res.status(503).json({ message: "Image generation is not configured. Add HF_TOKEN to the server environment first." });
-    }
     try {
-        const client = new InferenceClient(process.env.HF_TOKEN);
-        const image = await client.textToImage({
-            model: process.env.HF_IMAGE_MODEL || "black-forest-labs/FLUX.1-schnell",
-            inputs: prompt
+        const imageBuffer = await runCloudflareImageModel(CLOUDFLARE_IMAGE_MODEL, {
+            prompt,
+            steps: 4,
+            seed: crypto.randomInt(1, 2147483647)
         });
-        const imageBuffer = Buffer.from(await image.arrayBuffer());
         const userDirectory = path.join(generatedImagesDirectory, String(req.session.userId));
         fs.mkdirSync(userDirectory, { recursive: true });
-        const filename = `${Date.now()}-${require("crypto").randomUUID()}.png`;
+        const filename = `${Date.now()}-${crypto.randomUUID()}.jpg`;
         fs.writeFileSync(path.join(userDirectory, filename), imageBuffer);
         fs.writeFileSync(
-            path.join(userDirectory, filename.replace(/\.png$/, ".json")),
+            path.join(userDirectory, filename.replace(/\.jpg$/, ".json")),
             JSON.stringify({ prompt, createdAt: new Date().toISOString() }, null, 2)
         );
         return res.json({ imageUrl: `/api/generated-images/${encodeURIComponent(filename)}` });
     } catch (error) {
-        console.error("IMAGE GENERATION ERROR:", error?.message || error);
-        const providerMessage = String(error?.message || "");
-        if (/no remaining credits|insufficient credits|credit balance/i.test(providerMessage)) {
-            return res.status(402).json({
-                code: "IMAGE_CREDITS_EXHAUSTED",
-                message: "Image generation is unavailable because the configured Hugging Face account has no inference credits remaining. The app will not charge you. An administrator must add a provider with available quota before image generation can resume."
-            });
-        }
-        return res.status(502).json({ message: "Image generation failed because the configured provider did not complete the request. Please try again later." });
+        const failure = getImageProviderFailure(error);
+        return res.status(failure.status).json(failure.body);
     }
 });
 
@@ -280,9 +320,9 @@ app.get("/api/generated-images", (req, res) => {
     if (!fs.existsSync(userDirectory)) return res.json({ images: [] });
     try {
         const images = fs.readdirSync(userDirectory)
-            .filter(filename => /^[\w.-]+\.png$/.test(filename))
+            .filter(filename => /^[\w.-]+\.(?:png|jpe?g)$/i.test(filename))
             .map(filename => {
-                const metadataPath = path.join(userDirectory, filename.replace(/\.png$/, ".json"));
+                const metadataPath = path.join(userDirectory, filename.replace(/\.(?:png|jpe?g)$/i, ".json"));
                 let metadata = {};
                 try { metadata = JSON.parse(fs.readFileSync(metadataPath, "utf8")); } catch {}
                 return {
@@ -302,10 +342,10 @@ app.get("/api/generated-images", (req, res) => {
 app.get("/api/generated-images/:filename", (req, res) => {
     if (!req.session?.userId) return res.sendStatus(401);
     const filename = String(req.params.filename || "");
-    if (!/^[\w.-]+\.png$/.test(filename)) return res.sendStatus(400);
+    if (!/^[\w.-]+\.(?:png|jpe?g)$/i.test(filename)) return res.sendStatus(400);
     const imagePath = path.join(generatedImagesDirectory, String(req.session.userId), filename);
     if (!fs.existsSync(imagePath)) return res.sendStatus(404);
-    res.type("png").sendFile(imagePath);
+    res.type(path.extname(filename).slice(1)).sendFile(imagePath);
 });
 
 const generatedFilesDirectory = path.join(dataDirectory, "generated-files");
@@ -689,7 +729,7 @@ app.post("/api/create-file", async (req, res) => {
 app.get("/api/edited-files/:filename", (req, res) => {
     if (!req.session?.userId) return res.sendStatus(401);
     const filename = String(req.params.filename || "");
-    const allowed = [...generatedFileExtensions, "png"].join("|");
+    const allowed = [...generatedFileExtensions, "png", "jpg", "jpeg"].join("|");
     if (!new RegExp(`^bzu-ai-[a-f0-9-]{36}\\.(${allowed})$`, "i").test(filename)) return res.sendStatus(400);
     const userDirectory = path.join(generatedFilesDirectory, String(req.session.userId));
     const filePath = path.join(userDirectory, filename);
@@ -709,10 +749,10 @@ app.get("/api/edited-files/:filename", (req, res) => {
 app.get("/api/edited-images/:filename", (req, res) => {
     if (!req.session?.userId) return res.sendStatus(401);
     const filename = String(req.params.filename || "");
-    if (!/^bzu-ai-[a-f0-9-]{36}\.png$/i.test(filename)) return res.sendStatus(400);
+    if (!/^bzu-ai-[a-f0-9-]{36}\.(?:png|jpe?g)$/i.test(filename)) return res.sendStatus(400);
     const filePath = path.join(generatedFilesDirectory, String(req.session.userId), filename);
     if (!fs.existsSync(filePath)) return res.sendStatus(404);
-    res.type("png").sendFile(filePath);
+    res.type(path.extname(filename).slice(1)).sendFile(filePath);
 });
 
 app.get("/api/uploaded-files/:filename", (req, res) => {
@@ -753,18 +793,14 @@ app.post("/api/edit-upload", async (req, res) => {
     try {
         const sourceName = path.parse(metadata.originalName || "upload").name;
         if (metadata.isImage) {
-            if (!process.env.HF_TOKEN) return res.status(503).json({ message: "Image editing is not configured. Add HF_TOKEN to the server environment first." });
-            const client = new InferenceClient(process.env.HF_TOKEN);
             const sourceImage = fs.readFileSync(sourcePath);
-            const editedImage = await client.imageToImage({
-                model: process.env.HF_IMAGE_EDIT_MODEL || "black-forest-labs/FLUX.1-Kontext-dev",
-                inputs: new Blob([sourceImage], { type: metadata.mimeType || "image/png" }),
-                parameters: { prompt: instruction }
+            const imageBuffer = await runCloudflareImageModel(CLOUDFLARE_IMAGE_EDIT_MODEL, {
+                prompt: instruction,
+                image: sourceImage.toString("base64")
             });
-            const imageBuffer = Buffer.from(await editedImage.arrayBuffer());
             const output = saveGeneratedOutput(
                 req.session.userId,
-                "png",
+                "jpg",
                 imageBuffer,
                 `edited-${sourceName}`,
                 instruction
