@@ -999,6 +999,10 @@ console.log("CHAT MODEL:", CHAT_MODEL);
 console.log("=================================");
 
 const MAX_CHAT_TOKENS = 800;
+// Keep BZU retrieval context below Groq's per-minute prompt limits. Retrieval
+// can otherwise combine several long prospectus passages with live notices.
+const MAX_BZU_KNOWLEDGE_CHARS = 10_000;
+const MAX_BZU_KNOWLEDGE_ITEM_CHARS = 2_400;
 const MAX_DOCUMENT_TOKENS = 8000;
 const MAX_GENERATION_TOKENS = Math.min(
     12000,
@@ -1020,8 +1024,47 @@ function getGroqErrorDetails(error) {
 
 function shouldTryChatModelFallback(error) {
     const status = Number(error?.status);
+    if (status === 413) {
+        // Groq uses HTTP 413 for token-per-minute limits on some model tiers.
+        return error?.type === "tokens" || error?.code === "rate_limit_exceeded";
+    }
     return [400, 404, 408, 409, 429].includes(status) || status >= 500 ||
         ["ECONNRESET", "ETIMEDOUT", "EAI_AGAIN", "ECONNREFUSED"].includes(error?.code);
+}
+
+function trimKnowledgeEntry(text, maximumCharacters) {
+    const source = String(text || "").trim();
+    if (source.length <= maximumCharacters) return source;
+
+    const preservedLines = source.match(/^(?:Official link|Source(?: URL)?):[^\r\n]*/gim) || [];
+    const suffix = [...new Set(preservedLines)].join("\n");
+    const marker = "\n[Source excerpt shortened to fit the model context limit.]\n";
+    const headLength = Math.max(0, maximumCharacters - suffix.length - marker.length);
+    return `${source.slice(0, headLength).trimEnd()}${marker}${suffix}`.slice(0, maximumCharacters);
+}
+
+function buildBoundedKnowledgeText(knowledge) {
+    const entries = [];
+    let remaining = MAX_BZU_KNOWLEDGE_CHARS;
+
+    for (const item of knowledge || []) {
+        if (remaining <= 0) break;
+        let text = String(item?.text || item?.content || "")
+            .replace(/\bsource\s*:\s*[^\n\r]*/gi, "")
+            .replace(/\bpages?\s*[\d,\-\s]+/gi, "")
+            .replace(/\n{3,}/g, "\n\n")
+            .trim();
+        const sourceTitle = String(item?.title || item?.name || "").trim();
+        if (sourceTitle) text = `Source: ${sourceTitle}\n${text}`;
+
+        const entryLimit = Math.min(MAX_BZU_KNOWLEDGE_ITEM_CHARS, remaining);
+        const entry = trimKnowledgeEntry(text, entryLimit);
+        if (!entry) continue;
+        entries.push(entry);
+        remaining -= entry.length + 2;
+    }
+
+    return entries.join("\n\n");
 }
 
 const uploadProgress = new Map();
@@ -1875,7 +1918,15 @@ console.log(
                     try {
                         const currentNotices = await fetchOfficialBzuNotices(quickTopic?.liveQuery || currentQuestion);
                         if (currentNotices.length) {
-                            knowledge = [...currentNotices, ...knowledge];
+                            const isGeneralNoticesRequest =
+                                quickTopic?.liveQuery === "notices" ||
+                                (/\b(notice|notices|news|announcement|announcements|notification|notifications|event|events)\b/i.test(currentQuestion) &&
+                                    !/\b(admission|admissions|scholarship|scholarships|honhaar|honhar|peef|bisp|transport|bus|route|routes|job|jobs|vacancy|vacancies|result|results|date sheet|merit list|tender)\b/i.test(currentQuestion));
+                            // A generic notices request should use current official notices,
+                            // not large and potentially stale prospectus passages.
+                            knowledge = isGeneralNoticesRequest
+                                ? currentNotices
+                                : [...currentNotices, ...knowledge];
                             console.log("LIVE BZU OFFICIAL NOTICES FOUND:", currentNotices.length);
                         } else {
                             console.log("LIVE BZU OFFICIAL NOTICES: no matching items");
@@ -1923,38 +1974,16 @@ console.log(
         // PREPARE BZU KNOWLEDGE
         // ==================================================
 
-        const officialKnowledgeText =
-            (knowledge || [])
-                .map((item) => {
+        const officialKnowledgeText = buildBoundedKnowledgeText(knowledge);
 
-                    let text = String(
-                        item?.text ||
-                        item?.content ||
-                        ""
-                    );
-
-                    // Remove source references
-                    text = text.replace(
-                        /\bsource\s*:\s*[^\n\r]*/gi,
-                        ""
-                    );
-
-                    // Remove page references
-                    text = text.replace(
-                        /\bpages?\s*[\d,\-\s]+/gi,
-                        ""
-                    );
-
-                    // Clean whitespace
-                    text = text
-                        .replace(/\n{3,}/g, "\n\n")
-                        .trim();
-
-                    const sourceTitle = String(item?.title || item?.name || "").trim();
-                    return sourceTitle ? `Source: ${sourceTitle}\n${text}` : text;
-                })
-                .filter(Boolean)
-                .join("\n\n");
+        if ((knowledge || []).length && (knowledge || []).some(item =>
+            String(item?.text || item?.content || "").length > MAX_BZU_KNOWLEDGE_ITEM_CHARS
+        )) {
+            console.log("BZU KNOWLEDGE CONTEXT BOUNDED:", JSON.stringify({
+                maxCharacters: MAX_BZU_KNOWLEDGE_CHARS,
+                actualCharacters: officialKnowledgeText.length
+            }));
+        }
 
         console.log(
             "KNOWLEDGE TEXT LENGTH:",

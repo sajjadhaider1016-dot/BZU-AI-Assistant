@@ -1257,7 +1257,17 @@ async function sendMessage() {
 
         if (!response.ok) {
 
-            throw new Error("Server Error");
+            let errorData = {};
+            try {
+                errorData = await response.json();
+            } catch {
+                // Keep the HTTP status as a useful fallback for non-JSON errors.
+            }
+            throw new Error(
+                errorData.reply ||
+                errorData.message ||
+                `The server could not complete this request (HTTP ${response.status}). Please try again.`
+            );
 
         }
 
