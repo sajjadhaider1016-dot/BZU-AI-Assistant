@@ -2463,7 +2463,10 @@ ${officialKnowledgeText || "No relevant BZU information was retrieved."}`
             max_tokens: generatedFileExtensions.has(normalizedFileFormat)
                 ? MAX_GENERATION_TOKENS
                 : isShortBzuTopicPrompt
-                    ? (isBzuScholarshipQuery(currentQuestion) ? 800 : 600)
+                    // Topic buttons need enough room for names, dates, steps, and
+                    // official links. The previous 600/800 token cap caused
+                    // real answers (especially scholarships) to end mid-sentence.
+                    ? (isBzuScholarshipQuery(currentQuestion) ? 1_600 : 1_200)
                     : MAX_CHAT_TOKENS
         };
         let completion;
@@ -2524,6 +2527,16 @@ ${officialKnowledgeText || "No relevant BZU information was retrieved."}`
             return res.status(502).json({
                 success: false,
                 reply: "The requested file exceeded the AI response limit before it was complete. Please ask for a smaller scope or split the project into parts."
+            });
+        }
+        if (isShortBzuTopicPrompt && finishReason === "length") {
+            console.warn("BZU HOME TOPIC RESPONSE HIT OUTPUT LIMIT:", JSON.stringify({
+                topicKey: String(topicKey || "").slice(0, 40),
+                maxTokens: completionOptions.max_tokens
+            }));
+            return res.status(502).json({
+                success: false,
+                reply: "I couldn’t finish the BZU answer completely. Please tap the topic again in a moment, or ask about one detail (such as eligibility, deadline, or application steps)."
             });
         }
 
