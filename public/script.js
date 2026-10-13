@@ -948,6 +948,8 @@ function isUploadedDocumentFollowUp(text) {
 async function sendMessage() {
 
     const text = messageInput.value.trim();
+    const topicKey = window.pendingQuickTopicKey || "";
+    window.pendingQuickTopicKey = "";
 
     const fileToUpload = pendingUploadFile;
 
@@ -1224,6 +1226,8 @@ async function sendMessage() {
             ? "Analyzing the uploaded file…"
             : fileRequest
                 ? getFileWorkStatus(text, fileRequest.formats[0])
+                : topicKey
+                    ? "Checking official BZU information…"
                 : "Thinking…");
         const response = await fetch("/chat", {
 
@@ -1245,7 +1249,8 @@ async function sendMessage() {
 
     fileFormat: fileRequest?.formats?.[0] || "",
 
-    fileContext: fileRequest?.usePrevious ? previousAssistantReply : ""
+    fileContext: fileRequest?.usePrevious ? previousAssistantReply : "",
+    topicKey
 
 })
         });
@@ -1958,6 +1963,7 @@ document.querySelectorAll(".quick-btn").forEach(btn=>{
 
         const topic = btn.textContent.trim().replace(/^[^A-Za-z0-9]+/, "");
         messageInput.value = `BZU ${topic}`;
+        window.pendingQuickTopicKey = btn.dataset.topic || "";
 
         sendMessage();
 

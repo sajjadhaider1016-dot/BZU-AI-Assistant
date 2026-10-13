@@ -337,6 +337,12 @@ function searchKnowledge(query) {
         const combined = `${title} ${text}`;
         const sourceYear = prospectusYear(`${item.title || item.name || ""} ${item.text || item.content || item.description || ""}`);
 
+        // Ignore editorial placeholders; these are not factual fee data and
+        // must never outrank the real fee tables extracted from the prospectus.
+        if (/\[(?:exact data|insert\s+[^\]]+)\]/i.test(String(item.text || item.content || item.description || ""))) {
+            continue;
+        }
+
         let score = 0;
 
         // ==================================================
@@ -798,10 +804,34 @@ function searchKnowledge(query) {
     console.log("");
 
     // ==================================================
-    // RETURN TOP RESULTS
+    // Merge split OCR chunks from a single prospectus page and remove exact
+    // duplicates so the model sees distinct, complete evidence instead of the
+    // same page repeated several times.
     // ==================================================
 
-    return results.slice(0, 5);
+    const compactResults = [];
+    const byProspectusPage = new Map();
+    const exactSeen = new Set();
+    for (const result of results) {
+        const normalizedText = normalize(result.text);
+        const exactKey = `${result.title}\n${normalizedText}`;
+        if (exactSeen.has(exactKey)) continue;
+        exactSeen.add(exactKey);
+
+        if (/^bzu prospectus\s+20\d{2}\s+-\s+pdf page\s+\d+$/i.test(result.title)) {
+            const existing = byProspectusPage.get(result.title);
+            if (existing) {
+                existing.text += `\n\n${result.text}`;
+                existing.score = Math.max(existing.score, result.score);
+                continue;
+            }
+            byProspectusPage.set(result.title, result);
+        }
+        compactResults.push(result);
+    }
+
+    compactResults.sort((a, b) => b.score - a.score);
+    return compactResults.slice(0, 5);
 }
 
 // ======================================================

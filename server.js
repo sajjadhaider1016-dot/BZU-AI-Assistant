@@ -1288,14 +1288,86 @@ function isBZUQuestion(message) {
 }
 
 function isBzuNoticeQuery(message) {
-    return /\b(notice|notices|announcement|announcements|notification|notifications|event|events|news|date sheet|result|results|merit list|merit lists|tender|tenders|vacancy|vacancies|job|jobs|scholarship|scholarships|honhaar|honhar|peef|bisp|transport|bus|buses|route|routes)\b/i.test(String(message || ""));
+    return /\b(notice|notices|announcement|announcements|notification|notifications|event|events|news|date sheet|result|results|merit list|merit lists|tender|tenders|vacancy|vacancies|job|jobs|admission|admissions|scholarship|scholarships|honhaar|honhar|peef|bisp|transport|bus|buses|route|routes)\b/i.test(String(message || ""));
 }
 
 function isBzuScholarshipQuery(message) {
     return /\b(scholarship|scholarships|financial aid|honhaar|honhar|peef|bisp|hec need.?based|wazifa|wazaif)\b/i.test(String(message || ""));
 }
 
-async function fetchOfficialBzuNotices(query, pageUrl = "https://bzu.edu.pk/latest-news.php") {
+const QUICK_BZU_TOPICS = Object.freeze({
+    admissions: {
+        question: "Summarize BZU's 2026 admissions process from the 2026 prospectus. Explain the published application steps, eligibility rules, and any dates that are explicitly stated. Clearly flag details that are not published.",
+        searchQuery: "BZU Prospectus 2026 admissions rules regulations application eligibility admission procedure merit criteria dates",
+        liveQuery: "admissions"
+    },
+    fees: {
+        question: "Summarize BZU's official 2026 undergraduate fee structure. Distinguish one-time admission charges from semester charges and explain that exact totals depend on program and study mode. Use only the published amounts and link the source.",
+        searchQuery: "BZU Undergraduate Fee Structure 2026 program semester admission tuition fees morning evening",
+        liveQuery: "fee structure"
+    },
+    programs: {
+        question: "Give a useful overview of degree programs offered by BZU in the 2026 prospectus. Organize verified examples by faculty or subject area, and say where to find the complete program list. Do not infer programs from course descriptions.",
+        searchQuery: "BZU Prospectus 2026 programs of study degree programs BS BBA faculty department list",
+        liveQuery: "programs"
+    },
+    hostel: {
+        question: "Explain BZU's published hostel facilities and the hostel allotment process. Include the official application or management system link, eligibility, steps, and fees only if the source explicitly provides them.",
+        searchQuery: "BZU Prospectus 2026 hostel accommodation online hostel management system hostel allotment guidelines application fees",
+        liveQuery: "hostel"
+    },
+    transport: {
+        question: "Summarize BZU's student transport information from official sources: available routes or coverage, fleet, schedule, charges, and how students can confirm current details. Clearly mark anything not published.",
+        searchQuery: "BZU Prospectus 2026 student transport bus routes fleet schedule transport officer charges",
+        liveQuery: "transport"
+    },
+    scholarships: {
+        question: "Summarize BZU scholarships using the live official Scholarship Cell page and current dated official notices first, then the 2026 prospectus. Separate currently open schemes from historical or undated scheme information. Include eligibility, benefits, application steps, documents, deadlines, and official links only when stated.",
+        searchQuery: "BZU Prospectus 2026 scholarships financial assistance Scholarship Cell eligibility schemes",
+        liveQuery: "scholarship"
+    },
+    lms: {
+        question: "Give the official BZU LMS link and explain the verified sign-in and password recovery steps. Distinguish LMS from the separate student portal, and do not guess first-time credentials.",
+        searchQuery: "BZU Learning Management System LMS official login portal username password recovery",
+        liveQuery: "LMS"
+    },
+    notices: {
+        question: "Find recent official BZU notices and announcements. Give matching titles, dates, short descriptions, and official links. If no current notice can be verified, say so and link the official Latest News page.",
+        searchQuery: "BZU official latest news notices announcements current",
+        liveQuery: "notices"
+    }
+});
+
+const bzuLiveFetchCache = new Map();
+
+async function getCachedBzuLiveFetch(key, loader) {
+    const now = Date.now();
+    const existing = bzuLiveFetchCache.get(key);
+    if (existing && existing.expiresAt > now) {
+        return existing.promise || existing.value;
+    }
+
+    for (const [cacheKey, entry] of bzuLiveFetchCache) {
+        if (entry.expiresAt <= now) bzuLiveFetchCache.delete(cacheKey);
+    }
+    if (bzuLiveFetchCache.size >= 24) {
+        bzuLiveFetchCache.delete(bzuLiveFetchCache.keys().next().value);
+    }
+
+    const entry = { expiresAt: now + 5 * 60 * 1000 };
+    entry.promise = Promise.resolve().then(loader).then(value => {
+        entry.value = value;
+        delete entry.promise;
+        return value;
+    }).catch(error => {
+        bzuLiveFetchCache.delete(key);
+        throw error;
+    });
+    bzuLiveFetchCache.set(key, entry);
+    return entry.promise;
+}
+
+async function loadOfficialBzuNotices(query, pageUrl = "https://bzu.edu.pk/latest-news.php") {
     const response = await axios.get(pageUrl, {
         timeout: 10000,
         headers: { "User-Agent": "BZU-AI-Assistant/1.0 (+https://bzu.edu.pk)" },
@@ -1376,42 +1448,47 @@ async function fetchOfficialBzuNotices(query, pageUrl = "https://bzu.edu.pk/late
     }));
 }
 
-async function fetchOfficialBzuScholarshipInfo(query) {
+function fetchOfficialBzuNotices(query, pageUrl = "https://bzu.edu.pk/latest-news.php") {
+    const cacheKey = `notices:${pageUrl}:${String(query || "").trim().toLowerCase()}`;
+    return getCachedBzuLiveFetch(cacheKey, () => loadOfficialBzuNotices(query, pageUrl));
+}
+
+function fetchOfficialBzuScholarshipInfo(query) {
     const pageUrl = "https://bzu.edu.pk/scholarship-cell.php";
-    let scholarshipPage = [];
-    try {
-        const response = await axios.get(pageUrl, {
-            timeout: 12000,
-            headers: { "User-Agent": "BZU-AI-Assistant/1.0 (+https://bzu.edu.pk)" },
-            maxContentLength: 5 * 1024 * 1024
-        });
-        const $ = cheerio.load(response.data);
-        $("script, style, nav, header, footer, form, noscript").remove();
-        const pageText = ($("main").first().text() || $("body").text())
-            .replace(/\s+/g, " ")
-            .trim()
-            .slice(0, 12000);
+    const cacheKey = `scholarship-info:${String(query || "").trim().toLowerCase()}`;
+    return getCachedBzuLiveFetch(cacheKey, async () => {
+        const [scholarshipPage, currentNotices] = await Promise.all([
+            (async () => {
+                try {
+                    const response = await axios.get(pageUrl, {
+                        timeout: 8000,
+                        headers: { "User-Agent": "BZU-AI-Assistant/1.0 (+https://bzu.edu.pk)" },
+                        maxContentLength: 5 * 1024 * 1024
+                    });
+                    const $ = cheerio.load(response.data);
+                    $("script, style, nav, header, footer, form, noscript").remove();
+                    const pageText = ($("main").first().text() || $("body").text())
+                        .replace(/\s+/g, " ")
+                        .trim()
+                        .slice(0, 12000);
+                    return pageText ? [{ text: `Live official BZU Scholarship Cell / Financial Aid Office page. This page includes dated scholarship-program data; treat its stated financial year as the period covered, not as current application availability.\n${pageText}\nOfficial link: ${pageUrl}` }] : [];
+                } catch (error) {
+                    console.error("LIVE BZU SCHOLARSHIP CELL FETCH FAILED:", error?.message || error);
+                    return [];
+                }
+            })(),
+            (async () => {
+                try {
+                    return await fetchOfficialBzuNotices(query, "https://bzu.edu.pk/latest-news.php?cID=8");
+                } catch (error) {
+                    console.error("LIVE BZU SCHOLARSHIP NOTICE LOOKUP FAILED:", error?.message || error);
+                    return [];
+                }
+            })()
+        ]);
 
-        if (pageText) {
-            scholarshipPage = [{ text: `Live official BZU Scholarship Cell / Financial Aid Office page. This page includes dated scholarship-program data; treat its stated financial year as the period covered, not as current application availability.\n${pageText}\nOfficial link: ${pageUrl}` }];
-        }
-    } catch (error) {
-        console.error("LIVE BZU SCHOLARSHIP CELL FETCH FAILED:", error?.message || error);
-    }
-
-    // Include dated BZU scholarship notices for current phases, deadlines,
-    // verification steps, and document requirements beyond the prospectus.
-    let currentNotices = [];
-    try {
-        currentNotices = await fetchOfficialBzuNotices(
-            query,
-            "https://bzu.edu.pk/latest-news.php?cID=8"
-        );
-    } catch (error) {
-        console.error("LIVE BZU SCHOLARSHIP NOTICE LOOKUP FAILED:", error?.message || error);
-    }
-
-    return [...currentNotices, ...scholarshipPage];
+        return [...currentNotices, ...scholarshipPage];
+    });
 }
 
 // ======================================================
@@ -1466,8 +1543,11 @@ app.post("/chat", async (req, res) => {
             memory = {},
             userId = "default",
             fileFormat = "",
-            fileContext = ""
+            fileContext = "",
+            topicKey = ""
         } = req.body;
+
+        const quickTopic = QUICK_BZU_TOPICS[String(topicKey || "").trim().toLowerCase()] || null;
 
         console.log("=================================");
         console.log("CHAT REQUEST RECEIVED");
@@ -1495,7 +1575,8 @@ const latestMessage =
     messages[messages.length - 1]?.text ||
     messages[messages.length - 1]?.content ||
     "";
-const query = cleanQuery(latestMessage);
+const currentQuestion = quickTopic?.question || latestMessage;
+const query = cleanQuery(currentQuestion);
 if (!String(latestMessage).trim()) {
     return res.status(400).json({
         success: false,
@@ -1601,10 +1682,10 @@ const isBZUQuery =
     isBZUQuestion(latestMessage);
 
 const isShortBzuTopicPrompt =
-    isBZUQuery &&
+    Boolean(quickTopic) || (isBZUQuery &&
     query.split(/\s+/).filter(Boolean).length <= 3 &&
     /\b(lms|hostel|hostels|program|programs|admission|admissions|fee|fees|scholarship|scholarships|honhaar|honhar|peef|bisp|department|departments|transport)\b/i.test(query) &&
-    !/\b(what|which|how|when|where|why|who|explain|describe|list|details|compare|full|complete|all|tell|give)\b/i.test(query);
+    !/\b(what|which|how|when|where|why|who|explain|describe|list|details|compare|full|complete|all|tell|give)\b/i.test(query));
 
 // ==================================================
 // MEMORY DECISION
@@ -1764,19 +1845,19 @@ console.log(
             try {
 
                 knowledge =
-                    searchKnowledge(expandRomanUrduSearchTerms(query)) || [];
+                    searchKnowledge(quickTopic?.searchQuery || expandRomanUrduSearchTerms(query)) || [];
 
-                if (isBzuScholarshipQuery(latestMessage)) {
+                if (isBzuScholarshipQuery(currentQuestion)) {
                     try {
-                        const liveScholarshipInfo = await fetchOfficialBzuScholarshipInfo(latestMessage);
+                        const liveScholarshipInfo = await fetchOfficialBzuScholarshipInfo(quickTopic?.liveQuery || currentQuestion);
                         knowledge = [...liveScholarshipInfo, ...knowledge];
                         console.log("LIVE OFFICIAL BZU SCHOLARSHIP SOURCES FOUND:", liveScholarshipInfo.length);
                     } catch (liveScholarshipError) {
                         console.error("LIVE BZU SCHOLARSHIP LOOKUP FAILED:", liveScholarshipError?.message || liveScholarshipError);
                     }
-                } else if (isBzuNoticeQuery(latestMessage)) {
+                } else if (isBzuNoticeQuery(currentQuestion)) {
                     try {
-                        const currentNotices = await fetchOfficialBzuNotices(latestMessage);
+                        const currentNotices = await fetchOfficialBzuNotices(quickTopic?.liveQuery || currentQuestion);
                         if (currentNotices.length) {
                             knowledge = [...currentNotices, ...knowledge];
                             console.log("LIVE BZU OFFICIAL NOTICES FOUND:", currentNotices.length);
@@ -1853,7 +1934,8 @@ console.log(
                         .replace(/\n{3,}/g, "\n\n")
                         .trim();
 
-                    return text;
+                    const sourceTitle = String(item?.title || item?.name || "").trim();
+                    return sourceTitle ? `Source: ${sourceTitle}\n${text}` : text;
                 })
                 .filter(Boolean)
                 .join("\n\n");
@@ -1878,7 +1960,7 @@ const memoryText =
     userMemories
         .map(memory => memory.content)
         .join("\n");
-        const systemPrompt = `
+        const detailedSystemPrompt = `
 You are BZU AI Assistant, an intelligent university assistant developed by Sajjad Haider.
 
 Today's date in Pakistan is ${new Date().toLocaleDateString("en-GB", { timeZone: "Asia/Karachi" })}. Use it to distinguish active deadlines from expired scholarship notices.
@@ -2251,6 +2333,19 @@ For website requests, produce a complete, polished, responsive result that follo
 When creating files, include the requested content in the file itself. Prefer a useful, complete deliverable over a short outline. Respect explicit scope and length requirements, and do not pad the result with unrelated material.
 `;
 
+        const systemPrompt = isBZUQuery && !fileFormat
+            ? `You are BZU AI Assistant. Answer in the user's language, including natural Roman Urdu when they write Roman Urdu. Answer the current BZU question directly using the verified information below. Give useful specifics, dates, amounts, steps, and official links when the evidence includes them. Do not invent facts or mix prospectus years: prefer the newest source that covers the detail. If the evidence is partial, state what it supports and identify only the missing detail; if it is unrelated or empty, say you could not verify the answer and give an appropriate official link.
+
+For current notices and scholarships, prioritize dated live official BZU pages over prospectus summaries; clearly distinguish an active opening from historical program information. For fees, distinguish program, study mode, one-time and semester charges. For hostel and transport, do not invent routes, prices, availability, or eligibility. Keep the answer concise but complete for a topic button.
+
+Verified LMS: https://lms.bzu.edu.pk/ . Password recovery: https://lms.bzu.edu.pk/login/forgot_password.php . The LMS is separate from https://portal.bzu.edu.pk/ . Do not invent first-time credentials.
+
+Current date in Pakistan: ${new Date().toLocaleDateString("en-GB", { timeZone: "Asia/Karachi" })}.
+
+VERIFIED BZU INFORMATION:
+${officialKnowledgeText || "No relevant BZU information was retrieved."}`
+            : detailedSystemPrompt;
+
         // ==================================================
         // ADD SYSTEM MESSAGE
         // ==================================================
@@ -2296,9 +2391,9 @@ When creating files, include the requested content in the file itself. Prefer a 
 
         chatMessages.push({
             role: "user",
-            content: generatedFileExtensions.has(normalizedFileFormat)
+                content: generatedFileExtensions.has(normalizedFileFormat)
                 ? `Create complete content for a downloadable .${normalizedFileFormat} file in response to this request. Output only the file content, without a conversational introduction or closing. Do not put the complete output in a code fence unless it is part of the requested file. ${fileFormatHint}\n\nUser request: ${String(latestMessage)}${String(fileContext || "").trim() ? `\n\nContent to use from the previous assistant reply:\n${String(fileContext).slice(0, 50000)}` : ""}`
-                : String(latestMessage)
+                : String(currentQuestion)
         });
 
         // ==================================================
@@ -2329,11 +2424,11 @@ When creating files, include the requested content in the file itself. Prefer a 
                 max_tokens: generatedFileExtensions.has(normalizedFileFormat)
                     ? MAX_GENERATION_TOKENS
                     : isShortBzuTopicPrompt
-                        ? (isBzuScholarshipQuery(latestMessage) ? 700 : 220)
+                        ? (isBzuScholarshipQuery(currentQuestion) ? 800 : 600)
                         : MAX_CHAT_TOKENS
             }, {
-                timeout: 45_000,
-                maxRetries: 1
+                timeout: 35_000,
+                maxRetries: 0
             });
 
         // ==================================================
