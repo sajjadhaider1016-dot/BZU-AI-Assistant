@@ -1008,6 +1008,22 @@ const MAX_BOOK_TEXT_CHARS = 5_000_000;
 const MAX_DOCUMENT_CHUNK_CHARS = 30_000;
 const PDF_OCR_LANGUAGES = process.env.PDF_OCR_LANGUAGES || "eng+urd+ara";
 
+function getGroqErrorDetails(error) {
+    return {
+        status: Number.isFinite(error?.status) ? error.status : null,
+        code: error?.code || null,
+        type: error?.type || error?.name || null,
+        requestId: error?.request_id || error?.requestID || null,
+        message: String(error?.message || "Unknown Groq error").slice(0, 500)
+    };
+}
+
+function shouldTryChatModelFallback(error) {
+    const status = Number(error?.status);
+    return [400, 404, 408, 409, 429].includes(status) || status >= 500 ||
+        ["ECONNRESET", "ETIMEDOUT", "EAI_AGAIN", "ECONNREFUSED"].includes(error?.code);
+}
+
 const uploadProgress = new Map();
 
 function setUploadProgress(progressId, userId, status, complete = false, result = null) {
@@ -2412,24 +2428,50 @@ ${officialKnowledgeText || "No relevant BZU information was retrieved."}`
         const chatStartedAt = Date.now();
         console.log(`Sending request to Groq (${CHAT_MODEL})...`);
 
-        const completion =
-            await client.chat.completions.create({
-
-                model: CHAT_MODEL,
-
-                messages: chatMessages,
-
-                temperature: 0.2,
-
-                max_tokens: generatedFileExtensions.has(normalizedFileFormat)
-                    ? MAX_GENERATION_TOKENS
-                    : isShortBzuTopicPrompt
-                        ? (isBzuScholarshipQuery(currentQuestion) ? 800 : 600)
-                        : MAX_CHAT_TOKENS
+        const completionOptions = {
+            messages: chatMessages,
+            temperature: 0.2,
+            max_tokens: generatedFileExtensions.has(normalizedFileFormat)
+                ? MAX_GENERATION_TOKENS
+                : isShortBzuTopicPrompt
+                    ? (isBzuScholarshipQuery(currentQuestion) ? 800 : 600)
+                    : MAX_CHAT_TOKENS
+        };
+        let completion;
+        try {
+            completion = await client.chat.completions.create({
+                ...completionOptions,
+                model: CHAT_MODEL
             }, {
-                timeout: 35_000,
+                timeout: 20_000,
                 maxRetries: 0
             });
+        } catch (primaryError) {
+            const canFallback = AI_MODEL && AI_MODEL !== CHAT_MODEL && shouldTryChatModelFallback(primaryError);
+            console.error("GROQ PRIMARY CHAT MODEL FAILED:", JSON.stringify({
+                model: CHAT_MODEL,
+                fallbackModel: canFallback ? AI_MODEL : null,
+                error: getGroqErrorDetails(primaryError)
+            }));
+            if (!canFallback) throw primaryError;
+
+            try {
+                completion = await client.chat.completions.create({
+                    ...completionOptions,
+                    model: AI_MODEL
+                }, {
+                    timeout: 15_000,
+                    maxRetries: 0
+                });
+                console.warn(`GROQ CHAT FALLBACK SUCCEEDED: ${AI_MODEL}`);
+            } catch (fallbackError) {
+                console.error("GROQ CHAT FALLBACK FAILED:", JSON.stringify({
+                    model: AI_MODEL,
+                    error: getGroqErrorDetails(fallbackError)
+                }));
+                throw fallbackError;
+            }
+        }
 
         // ==================================================
         // GET RESPONSE
@@ -2565,18 +2607,18 @@ if (userId && userId !== "default") {
         // CHAT ERROR
         // ==================================================
 
-        console.error("=================================");
-        console.error("CHAT ERROR");
-        console.error(error);
-        console.error("=================================");
+        console.error("CHAT ERROR:", JSON.stringify({
+            requestId: req.headers["x-vercel-id"] || null,
+            path: req.path,
+            error: getGroqErrorDetails(error)
+        }));
 
-        return res.status(500).json({
-
+        const upstreamFailure = Number.isFinite(error?.status) || Boolean(error?.code);
+        return res.status(upstreamFailure ? 502 : 500).json({
             success: false,
-
-            reply:
-                error?.message ||
-                "Unable to connect to Groq AI."
+            reply: upstreamFailure
+                ? "BZU AI is temporarily unable to complete this reply. Please try again in a moment."
+                : "I couldn't complete that request. Please try again."
         });
     }
 });
