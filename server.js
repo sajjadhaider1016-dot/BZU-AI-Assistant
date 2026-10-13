@@ -1356,9 +1356,10 @@ function isBzuScholarshipQuery(message) {
 
 const QUICK_BZU_TOPICS = Object.freeze({
     admissions: {
-        question: "Summarize BZU's 2026 admissions process from the 2026 prospectus. Explain the published application steps, eligibility rules, and any dates that are explicitly stated. Clearly flag details that are not published.",
-        searchQuery: "BZU Prospectus 2026 admissions rules regulations application eligibility admission procedure merit criteria dates",
-        liveQuery: "admissions"
+        question: "Give a concise current BZU admissions update using the latest official Admission Schedules notices first. State which programs or calls are open only when the notice and deadline support that status; distinguish expired calls and merit-list updates. Include the relevant application steps and official links. Mention that eligibility differs by program and do not invent one university-wide percentage or date.",
+        searchQuery: "BZU Prospectus 2026 university admission rules online application portal",
+        liveQuery: "admissions",
+        livePageUrl: "https://bzu.edu.pk/latest-news.php?cID=7"
     },
     fees: {
         question: "Summarize BZU's official 2026 undergraduate fee structure. Distinguish one-time admission charges from semester charges and explain that exact totals depend on program and study mode. Use only the published amounts and link the source.",
@@ -1371,8 +1372,8 @@ const QUICK_BZU_TOPICS = Object.freeze({
         liveQuery: "programs"
     },
     hostel: {
-        question: "Explain BZU's published hostel facilities and the hostel allotment process. Include the official application or management system link, eligibility, steps, and fees only if the source explicitly provides them.",
-        searchQuery: "BZU Prospectus 2026 hostel accommodation online hostel management system hostel allotment guidelines application fees",
+        question: "Explain BZU's 2026 hostel application process as a clear numbered checklist. Include the verified student-portal URL, how to open HMS, required login/account details, request form, application tracking, payment after approval, and technical support. State that allotment depends on available accommodation and university rules. Include fees, hostel counts, or eligibility only if the 2026 source explicitly gives them. Link the official portal and cite the 2026 prospectus page.",
+        searchQuery: "BZU Prospectus 2026 Guidelines for Hostel Allotment Online Hostel Management System HMS Student Portal official BZU email Create Request hostel application",
         liveQuery: "hostel"
     },
     transport: {
@@ -1381,7 +1382,7 @@ const QUICK_BZU_TOPICS = Object.freeze({
         liveQuery: "transport"
     },
     scholarships: {
-        question: "Summarize BZU scholarships using the live official Scholarship Cell page and current dated official notices first, then the 2026 prospectus. Separate currently open schemes from historical or undated scheme information. Include eligibility, benefits, application steps, documents, deadlines, and official links only when stated.",
+        question: "Give a compact, useful BZU scholarship guide. Check dated live official notices first for schemes that are open now; never label an undated or expired scheme as currently open. Then summarize the main schemes described by BZU, including eligibility, benefits, documents, application steps, or deadlines only when the official sources state them. Link the official BZU Scholarship Cell and relevant scheme portals. Keep the complete answer under 450 words; clearly name details that BZU has not published.",
         searchQuery: "BZU Prospectus 2026 scholarships financial assistance Scholarship Cell eligibility schemes",
         liveQuery: "scholarship"
     },
@@ -1916,7 +1917,10 @@ console.log(
                     }
                 } else if (isBzuNoticeQuery(currentQuestion)) {
                     try {
-                        const currentNotices = await fetchOfficialBzuNotices(quickTopic?.liveQuery || currentQuestion);
+                        const currentNotices = await fetchOfficialBzuNotices(
+                            quickTopic?.liveQuery || currentQuestion,
+                            quickTopic?.livePageUrl
+                        );
                         if (currentNotices.length) {
                             const isGeneralNoticesRequest =
                                 quickTopic?.liveQuery === "notices" ||
@@ -1948,6 +1952,27 @@ console.log(
                 );
 
                 knowledge = [];
+            }
+
+            // Topic shortcuts should send the model the evidence for that topic,
+            // not merely whatever happened to rank in the first five results.
+            if (quickTopic?.liveQuery === "hostel") {
+                const hostel2026Steps = knowledge.filter(item =>
+                    /prospectus\s+2026/i.test(`${item?.title || ""} ${item?.text || ""}`) &&
+                    /online hostel management system|guidelines for hostel allotment|request for hostel/i.test(item?.text || "")
+                );
+                if (hostel2026Steps.length) knowledge = hostel2026Steps;
+            } else if (quickTopic?.liveQuery === "admissions") {
+                const liveAdmissionUpdates = knowledge.filter(item =>
+                    /current information from bzu's official latest news/i.test(item?.text || "")
+                );
+                const relevantProspectusRules = knowledge.filter(item =>
+                    /prospectus\s+2026/i.test(`${item?.title || ""} ${item?.text || ""}`) &&
+                    /admission rules and regulations|online applications? through|admission portal|application portal/i.test(item?.text || "")
+                );
+                if (liveAdmissionUpdates.length) {
+                    knowledge = [...liveAdmissionUpdates, ...relevantProspectusRules];
+                }
             }
 
         } else {
@@ -2460,6 +2485,13 @@ ${officialKnowledgeText || "No relevant BZU information was retrieved."}`
         const completionOptions = {
             messages: chatMessages,
             temperature: 0.2,
+            ...(CHAT_MODEL.startsWith("openai/gpt-oss-") ? {
+                // Keep reasoning tokens from consuming the small output budget on
+                // short, factual topic-button answers. Groq supports these fields
+                // for GPT-OSS; other configured models do not receive them.
+                include_reasoning: false,
+                ...(isShortBzuTopicPrompt ? { reasoning_effort: "low" } : {})
+            } : {}),
             max_tokens: generatedFileExtensions.has(normalizedFileFormat)
                 ? MAX_GENERATION_TOKENS
                 : isShortBzuTopicPrompt
