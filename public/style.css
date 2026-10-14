@@ -4436,10 +4436,33 @@ body.dark .developer-card h3 { color: #e0e8f2; }
 #refreshChatsBtn.is-refreshing i { animation: chat-history-spin .7s linear infinite; }
 .history { min-height: 130px; }
 .sidebar {
+    height: 100dvh;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+}
+.sidebar-scroll-section {
+    flex: 1 1 auto;
+    min-height: 0;
     overflow-x: hidden;
     overflow-y: auto;
     scrollbar-width: thin;
     scrollbar-color: #cbd5e1 transparent;
+}
+.sidebar-scroll-section::-webkit-scrollbar { width: 5px; }
+.sidebar-scroll-section::-webkit-scrollbar-thumb { background: #d8e0eb; border-radius: 8px; }
+.sidebar-scroll-section::-webkit-scrollbar-track { background: transparent; }
+.sidebar-bottom,
+.developer-card { flex: 0 0 auto; }
+.sidebar-bottom { margin-top: 8px; }
+.developer-card { margin-top: 7px; }
+.footer-note {
+    width: 100%;
+    text-align: center;
 }
 .sidebar::-webkit-scrollbar { width: 7px; }
 .sidebar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
