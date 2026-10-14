@@ -1320,7 +1320,14 @@ function correctCommonQueryTypos(message) {
         ["brief", ["brief"]],
         ["summarize", ["summarize", "summarise"]],
         ["explain", ["explain"]],
-        ["translate", ["translate"]]
+        ["translate", ["translate"]],
+        ["what", ["what"]],
+        ["when", ["when"]],
+        ["where", ["where"]],
+        ["which", ["which"]],
+        ["who", ["who"]],
+        ["why", ["why"]],
+        ["how", ["how"]]
     ]);
     const tokens = String(message || "").split(/(\b)/);
     const replacements = [];
@@ -1429,6 +1436,12 @@ function isAnswerStyleFollowUp(message) {
 function isConversationalAcknowledgement(message) {
     return /^(ok|okay|oky|ojky|okk|k|got it|understood|alright|all right|thanks|thank you|theek|thik|acha|achha|ٹھیک|ٹھیک ہے|اچھا)[.!\s]*$/i
         .test(String(message || "").trim());
+}
+
+function isShortContextQuestion(message) {
+    const text = correctCommonQueryTypos(message).text.trim().toLowerCase();
+    return /^(what|when|where|which|who|why|how)[?.!\s]*$/i.test(text) ||
+        /^(what|when|where|which|who|why|how) about (it|that|this)[?.!\s]*$/i.test(text);
 }
 
 function isBzuNoticeQuery(message) {
@@ -1835,7 +1848,9 @@ const precedingAssistantMessage = messages
     .find(message => message?.role === "assistant" && String(message?.text || message?.content || "").trim());
 const hasPriorAssistantContext = Boolean(precedingAssistantMessage);
 const isAcknowledgement = hasPriorAssistantContext && isConversationalAcknowledgement(latestMessage);
-const isAnswerFollowUp = Boolean(hasPriorAssistantContext && (isAnswerStyleFollowUp(latestMessage) || isAcknowledgement));
+const isStyleFollowUp = hasPriorAssistantContext && isAnswerStyleFollowUp(latestMessage);
+const isContextQuestionFollowUp = hasPriorAssistantContext && isShortContextQuestion(latestMessage);
+const isAnswerFollowUp = Boolean(isStyleFollowUp || isAcknowledgement || isContextQuestionFollowUp);
 const isBZUQuery =
     !isAnswerFollowUp && isBZUQuestion(routingMessage);
 
@@ -2517,7 +2532,9 @@ ${officialKnowledgeText || "No relevant BZU information was retrieved."}`
         const effectiveSystemPrompt = isAnswerFollowUp
             ? `${systemPrompt}\n\n${isAcknowledgement
                 ? "The current user message is a brief acknowledgement. Use recent chat context, acknowledge naturally in one short sentence, and do not restart the previous answer or treat this as a new BZU fact lookup."
-                : "The current user message is a style/revision follow-up to the preceding conversation. Use the previous user request and assistant answer included below as context. Revise that answer as requested; do not treat this as a new BZU fact lookup and do not return the BZU knowledge fallback."}`
+                : isContextQuestionFollowUp
+                    ? "The current user message is a very short question referring to the recent conversation. Use the previous turns to infer what they mean and answer that directly. If it remains ambiguous, ask one concise clarification; do not return the BZU knowledge fallback."
+                    : "The current user message is a style/revision follow-up to the preceding conversation. Use the previous user request and assistant answer included below as context. Revise that answer as requested; do not treat this as a new BZU fact lookup and do not return the BZU knowledge fallback."}`
             : systemPrompt;
 
         // ==================================================
