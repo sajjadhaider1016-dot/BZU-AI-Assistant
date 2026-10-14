@@ -1346,6 +1346,18 @@ function isBZUQuestion(message) {
         /\b(apply|application|available|availability|amount|price|cost|deadline|date|when|where|how much|how many|tell me|information|details|about|at|in|for)\b/.test(text);
 }
 
+function isAnswerStyleFollowUp(message) {
+    const text = String(message || "").trim().toLowerCase();
+    if (!text || text.length > 180) return false;
+
+    const asksToRevise = /\b(make|give|keep|write|answer|say|explain|summari[sz]e|shorten|simplify|expand|elaborate|rewrite|rephrase|translate|turn|put)\b/.test(text);
+    const requestsStyle = /\b(concise|brief|shorter|short|simple|simpler|detailed|more detail|one sentence|bullet points|in bullets|in urdu|in roman urdu|in english)\b/.test(text);
+    const pointsToPriorAnswer = /\b(it|that|this|above|previous|last|answer|response)\b/.test(text);
+
+    return (asksToRevise && requestsStyle) ||
+        (pointsToPriorAnswer && /\b(again|differently|shorter|longer|simpler|clearly|bullet points|one sentence)\b/.test(text));
+}
+
 function isBzuNoticeQuery(message) {
     return /\b(notice|notices|announcement|announcements|notification|notifications|event|events|news|date sheet|result|results|merit list|merit lists|tender|tenders|vacancy|vacancies|job|jobs|admission|admissions|scholarship|scholarships|honhaar|honhar|peef|bisp|transport|bus|buses|route|routes)\b/i.test(String(message || ""));
 }
@@ -1738,8 +1750,13 @@ const isMemoryQuestion =
 // BZU QUESTION DETECTION
 // ==================================================
 
+const precedingAssistantMessage = messages
+    .slice(0, -1)
+    .reverse()
+    .find(message => message?.role === "assistant" && String(message?.text || message?.content || "").trim());
+const isAnswerFollowUp = Boolean(precedingAssistantMessage && isAnswerStyleFollowUp(latestMessage));
 const isBZUQuery =
-    isBZUQuestion(latestMessage);
+    !isAnswerFollowUp && isBZUQuestion(latestMessage);
 
 const isShortBzuTopicPrompt =
     Boolean(quickTopic) || (isBZUQuery &&
@@ -2416,20 +2433,35 @@ VERIFIED BZU INFORMATION:
 ${officialKnowledgeText || "No relevant BZU information was retrieved."}`
             : detailedSystemPrompt;
 
+        const effectiveSystemPrompt = isAnswerFollowUp
+            ? `${systemPrompt}\n\nThe current user message is a style/revision follow-up to the preceding conversation. Use the previous user request and assistant answer included below as context. Revise that answer as requested; do not treat this as a new BZU fact lookup and do not return the BZU knowledge fallback.`
+            : systemPrompt;
+
         // ==================================================
         // ADD SYSTEM MESSAGE
         // ==================================================
 
         chatMessages.push({
             role: "system",
-            content: systemPrompt
+            content: effectiveSystemPrompt
         });
 
         // ==================================================
         // ADD MEMORY ONLY IF ALLOWED
         // ==================================================
 
-        if (useMemory && previousMessages.length > 0) {
+        if (isAnswerFollowUp) {
+            const recentRequestContext = messages
+                .slice(-7, -1)
+                .filter(message => ["user", "assistant"].includes(message?.role))
+                .map(message => ({
+                    role: message.role,
+                    content: String(message.text || message.content || "").slice(0, 8000)
+                }))
+                .filter(message => message.content.trim());
+
+            chatMessages.push(...recentRequestContext);
+        } else if (useMemory && previousMessages.length > 0) {
 
             chatMessages.push(
                 ...previousMessages.slice(-5)
