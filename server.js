@@ -1300,6 +1300,72 @@ function expandRomanUrduSearchTerms(message) {
         expanded.replace(pattern, match => `${match} ${replacement}`), String(message || ""));
 }
 
+// Correct only well-known university-topic and conversational words. Keeping
+// this vocabulary bounded avoids silently changing names or factual details.
+function correctCommonQueryTypos(message) {
+    const corrections = new Map([
+        ["admission", ["admission", "admissions"]],
+        ["scholarship", ["scholarship", "scholarships"]],
+        ["hostel", ["hostel", "hostels"]],
+        ["transport", ["transport"]],
+        ["program", ["program", "programs"]],
+        ["department", ["department", "departments"]],
+        ["notice", ["notice", "notices"]],
+        ["fee", ["fee", "fees"]],
+        ["lms", ["lms"]],
+        ["campus", ["campus"]],
+        ["eligibility", ["eligibility"]],
+        ["prospectus", ["prospectus"]],
+        ["concise", ["concise"]],
+        ["brief", ["brief"]],
+        ["summarize", ["summarize", "summarise"]],
+        ["explain", ["explain"]],
+        ["translate", ["translate"]]
+    ]);
+    const tokens = String(message || "").split(/(\b)/);
+    const replacements = [];
+    const corrected = tokens.map(token => {
+        if (!/^[a-z]{4,}$/i.test(token)) return token;
+        const lower = token.toLowerCase();
+        if ([...corrections.values()].some(forms => forms.includes(lower))) return token;
+        for (const [canonical, forms] of corrections) {
+            if (forms.some(form => editDistanceAtMostOne(lower, form))) {
+                replacements.push({ from: token, to: canonical });
+                return canonical;
+            }
+        }
+        return token;
+    }).join("");
+    return { text: corrected, replacements };
+}
+
+function editDistanceAtMostOne(left, right) {
+    if (left === right) return true;
+    if (Math.abs(left.length - right.length) > 1) return false;
+    if (left.length === right.length) {
+        const mismatches = [];
+        for (let k = 0; k < left.length; k++) {
+            if (left[k] !== right[k]) mismatches.push(k);
+        }
+        if (mismatches.length === 2 && mismatches[1] === mismatches[0] + 1 &&
+            left[mismatches[0]] === right[mismatches[1]] && left[mismatches[1]] === right[mismatches[0]]) {
+            return true;
+        }
+    }
+    let i = 0;
+    let j = 0;
+    let edits = 0;
+    while (i < left.length && j < right.length) {
+        if (left[i] === right[j]) { i++; j++; continue; }
+        if (++edits > 1) return false;
+        if (left.length > right.length) i++;
+        else if (right.length > left.length) j++;
+        else { i++; j++; }
+    }
+    if (i < left.length || j < right.length) edits++;
+    return edits <= 1;
+}
+
 function isBZUQuestion(message) {
     const text = String(message || "")
         .toLowerCase()
@@ -1350,12 +1416,19 @@ function isAnswerStyleFollowUp(message) {
     const text = String(message || "").trim().toLowerCase();
     if (!text || text.length > 180) return false;
 
-    const asksToRevise = /\b(make|give|keep|write|answer|say|explain|summari[sz]e|shorten|simplify|expand|elaborate|rewrite|rephrase|translate|turn|put)\b/.test(text);
-    const requestsStyle = /\b(concise|brief|shorter|short|simple|simpler|detailed|more detail|one sentence|bullet points|in bullets|in urdu|in roman urdu|in english)\b/.test(text);
+    const correctedText = correctCommonQueryTypos(text).text;
+    const asksToRevise = /\b(make|give|keep|write|answer|say|explain|summari[sz]e|shorten|simplify|expand|elaborate|rewrite|rephrase|translate|turn|put)\b/.test(correctedText);
+    const requestsStyle = /\b(concise|brief|shorter|short|simple|simpler|detailed|more detail|one sentence|bullet points|in bullets|in urdu|in roman urdu|in english)\b/.test(correctedText);
     const pointsToPriorAnswer = /\b(it|that|this|above|previous|last|answer|response)\b/.test(text);
 
     return (asksToRevise && requestsStyle) ||
-        (pointsToPriorAnswer && /\b(again|differently|shorter|longer|simpler|clearly|bullet points|one sentence)\b/.test(text));
+        (requestsStyle && /^(concise|brief|short|shorter|simple|simpler|detailed|in urdu|in roman urdu|in english)\s+answer$/.test(correctedText)) ||
+        (pointsToPriorAnswer && /\b(again|differently|shorter|longer|simpler|clearly|bullet points|one sentence)\b/.test(correctedText));
+}
+
+function isConversationalAcknowledgement(message) {
+    return /^(ok|okay|oky|ojky|okk|k|got it|understood|alright|all right|thanks|thank you|theek|thik|acha|achha|ٹھیک|ٹھیک ہے|اچھا)[.!\s]*$/i
+        .test(String(message || "").trim());
 }
 
 function isBzuNoticeQuery(message) {
@@ -1647,8 +1720,14 @@ const latestMessage =
     messages[messages.length - 1]?.text ||
     messages[messages.length - 1]?.content ||
     "";
-const currentQuestion = quickTopic?.question || latestMessage;
-const query = cleanQuery(currentQuestion);
+const rawQuestion = quickTopic?.question || latestMessage;
+const correctedQuery = correctCommonQueryTypos(rawQuestion);
+const currentQuestion = correctedQuery.text;
+const routingMessage = correctedQuery.text;
+const query = cleanQuery(routingMessage);
+if (correctedQuery.replacements.length) {
+    console.log("COMMON QUERY SPELLING NORMALIZED:", JSON.stringify(correctedQuery.replacements));
+}
 if (!String(latestMessage).trim()) {
     return res.status(400).json({
         success: false,
@@ -1754,9 +1833,11 @@ const precedingAssistantMessage = messages
     .slice(0, -1)
     .reverse()
     .find(message => message?.role === "assistant" && String(message?.text || message?.content || "").trim());
-const isAnswerFollowUp = Boolean(precedingAssistantMessage && isAnswerStyleFollowUp(latestMessage));
+const hasPriorAssistantContext = Boolean(precedingAssistantMessage);
+const isAcknowledgement = hasPriorAssistantContext && isConversationalAcknowledgement(latestMessage);
+const isAnswerFollowUp = Boolean(hasPriorAssistantContext && (isAnswerStyleFollowUp(latestMessage) || isAcknowledgement));
 const isBZUQuery =
-    !isAnswerFollowUp && isBZUQuestion(latestMessage);
+    !isAnswerFollowUp && isBZUQuestion(routingMessage);
 
 const isShortBzuTopicPrompt =
     Boolean(quickTopic) || (isBZUQuery &&
@@ -1924,18 +2005,18 @@ console.log(
                 knowledge =
                     searchKnowledge(quickTopic?.searchQuery || expandRomanUrduSearchTerms(query)) || [];
 
-                if (isBzuScholarshipQuery(currentQuestion)) {
+                if (isBzuScholarshipQuery(routingMessage)) {
                     try {
-                        const liveScholarshipInfo = await fetchOfficialBzuScholarshipInfo(quickTopic?.liveQuery || currentQuestion);
+                        const liveScholarshipInfo = await fetchOfficialBzuScholarshipInfo(quickTopic?.liveQuery || routingMessage);
                         knowledge = [...liveScholarshipInfo, ...knowledge];
                         console.log("LIVE OFFICIAL BZU SCHOLARSHIP SOURCES FOUND:", liveScholarshipInfo.length);
                     } catch (liveScholarshipError) {
                         console.error("LIVE BZU SCHOLARSHIP LOOKUP FAILED:", liveScholarshipError?.message || liveScholarshipError);
                     }
-                } else if (isBzuNoticeQuery(currentQuestion)) {
+                } else if (isBzuNoticeQuery(routingMessage)) {
                     try {
                         const currentNotices = await fetchOfficialBzuNotices(
-                            quickTopic?.liveQuery || currentQuestion,
+                            quickTopic?.liveQuery || routingMessage,
                             quickTopic?.livePageUrl
                         );
                         if (currentNotices.length) {
@@ -2068,7 +2149,7 @@ LANGUAGE AND ACCURACY
 
 Understand and answer in the language the user used. This includes Urdu, English, Arabic, and mixed-language messages. Recognize Roman Urdu written with Latin letters (for example, "BZU ke programs kon se hain?", "hostel ki fees kitni hai?", or "admission kab shuru honge?") and answer naturally in Roman Urdu when the user writes in Roman Urdu. If the user explicitly requests a language, use that language. Do not mistake Roman Urdu for broken English or ask the user to translate.
 
-For BZU questions in any language, use retrieved BZU facts and the verified official LMS reference below. Translate the response into the user's language without changing names, dates, eligibility, or numbers. Never guess to sound helpful. If the retrieved facts answer only part of the question, state the supported facts first and name only the specific details that are missing. Do not add the blanket sentence "I could not find this information in my BZU knowledge" when you have already provided relevant facts; that would contradict your answer. Use that sentence only when no relevant BZU facts were retrieved. When retrieved prospectus passages have different publication years, use the newest year that contains the requested fact and identify that year in the answer. Do not combine conflicting figures from different years. Use an older prospectus only if the user asks about that year or the newer prospectus does not cover the fact. For general questions, answer accurately, explain uncertainty when needed, and do not claim to understand a phrase if its meaning is unclear; ask a concise clarification in the user's language.
+For BZU questions in any language, including misspelled topic words, use retrieved BZU facts and the verified official LMS reference below. Translate the response into the user's language without changing names, dates, eligibility, or numbers. Never guess to sound helpful. If the retrieved facts answer only part of the question, state the supported facts first and name only the specific details that are missing. Do not add the blanket sentence "I could not find this information in my BZU knowledge" when you have already provided relevant facts; that would contradict your answer. Use that sentence only when no relevant BZU facts were retrieved. When retrieved prospectus passages have different publication years, use the newest year that contains the requested fact and identify that year in the answer. Do not combine conflicting figures from different years. Use an older prospectus only if the user asks about that year or the newer prospectus does not cover the fact. For every message, tolerate spelling mistakes, missing words, grammar errors, and informal phrasing. Silently correct obvious typos in your interpretation, preserve names and numbers, and answer the user's likely intent. Use earlier messages in this chat to interpret short follow-ups such as "concise answer", "and fees?", or "okay". If there are multiple plausible meanings, ask one short clarifying question in the user's language instead of returning a generic failure or an unrelated answer. For general questions, answer accurately and explain uncertainty when needed.
 
 For a short BZU topic prompt such as "Scholarships", "Transport", "Hostel", or "Admissions", give a useful, concise answer from the retrieved BZU knowledge. Include the key named programs, numbers, dates, procedures, or links present in the matching source; do not omit them just to keep the response to two sentences. If the source does not provide a requested detail, identify that specific gap and do not guess.
 
@@ -2434,7 +2515,9 @@ ${officialKnowledgeText || "No relevant BZU information was retrieved."}`
             : detailedSystemPrompt;
 
         const effectiveSystemPrompt = isAnswerFollowUp
-            ? `${systemPrompt}\n\nThe current user message is a style/revision follow-up to the preceding conversation. Use the previous user request and assistant answer included below as context. Revise that answer as requested; do not treat this as a new BZU fact lookup and do not return the BZU knowledge fallback.`
+            ? `${systemPrompt}\n\n${isAcknowledgement
+                ? "The current user message is a brief acknowledgement. Use recent chat context, acknowledge naturally in one short sentence, and do not restart the previous answer or treat this as a new BZU fact lookup."
+                : "The current user message is a style/revision follow-up to the preceding conversation. Use the previous user request and assistant answer included below as context. Revise that answer as requested; do not treat this as a new BZU fact lookup and do not return the BZU knowledge fallback."}`
             : systemPrompt;
 
         // ==================================================
@@ -2576,7 +2659,7 @@ ${officialKnowledgeText || "No relevant BZU information was retrieved."}`
         const replyContent = completion?.choices?.[0]?.message?.content;
         const reply = typeof replyContent === "string" && replyContent.trim()
             ? replyContent.trim()
-            : "I couldn't produce a reply this time. Please try again.";
+            : "I’m not sure I understood that. Could you rephrase it or add one detail?";
 
         const finishReason = completion?.choices?.[0]?.finish_reason;
         console.log("GROQ CHAT TIMING:", JSON.stringify({
