@@ -140,6 +140,42 @@ app.use(
     )
 );
 
+app.get("/api/conversations", async (req, res) => {
+    const authenticatedUserId = String(req.session?.userId || "");
+    if (!authenticatedUserId) {
+        return res.status(401).json({ success: false, message: "Please sign in to view your chats." });
+    }
+    try {
+        const conversations = await prisma.conversation.findMany({
+            where: { userId: authenticatedUserId },
+            orderBy: { updatedAt: "desc" },
+            take: 100,
+            include: {
+                messages: {
+                    orderBy: { createdAt: "asc" },
+                    select: { role: true, content: true, createdAt: true }
+                }
+            }
+        });
+        return res.json({
+            success: true,
+            conversations: conversations.map(conversation => ({
+                id: conversation.id,
+                title: conversation.title || "New Chat",
+                updatedAt: conversation.updatedAt,
+                messages: conversation.messages.map(message => ({
+                    role: message.role,
+                    text: message.content,
+                    createdAt: message.createdAt
+                }))
+            }))
+        });
+    } catch (error) {
+        console.error("LOAD CHAT HISTORY ERROR:", error?.message || error);
+        return res.status(500).json({ success: false, message: "Could not load your saved chats." });
+    }
+});
+
 const generatedImagesDirectory = path.join(dataDirectory, "generated-images");
 const CLOUDFLARE_IMAGE_MODEL = "@cf/black-forest-labs/flux-1-schnell";
 const CLOUDFLARE_IMAGE_EDIT_MODEL = "@cf/black-forest-labs/flux-2-klein-4b";
@@ -1699,11 +1735,14 @@ app.post("/chat", async (req, res) => {
         const {
             messages = [],
             memory = {},
-            userId = "default",
+            conversationId: requestedConversationId = "",
             fileFormat = "",
             fileContext = "",
             topicKey = ""
         } = req.body;
+
+        const userId = String(req.session?.userId || "default");
+        const conversationId = String(requestedConversationId || "");
 
         const quickTopic = QUICK_BZU_TOPICS[String(topicKey || "").trim().toLowerCase()] || null;
 
@@ -1896,6 +1935,7 @@ Phone: ${memory?.phone || ""}
 let previousMessages = [];
 let userMemories = [];
 
+let savedConversationId = null;
 if (userId && userId !== "default") {
 
     try {
@@ -2721,26 +2761,22 @@ if (userId && userId !== "default") {
 
     try {
 
-        // Find the user's latest conversation
-        let conversation =
-            await prisma.conversation.findFirst({
-                where: {
-                    userId: userId
-                },
-                orderBy: {
-                    updatedAt: "desc"
-                }
-            });
+        // Continue only the conversation explicitly selected in the client.
+        // A new chat gets its own database conversation instead of appending
+        // into whichever conversation happened to be updated most recently.
+        let conversation = conversationId
+            ? await prisma.conversation.findFirst({
+                where: { id: conversationId, userId }
+            })
+            : null;
 
-        // Create a conversation if this is the user's first chat
         if (!conversation) {
-
             conversation =
                 await prisma.conversation.create({
                     data: {
-                        userId: userId,
+                        userId,
                         title:
-                            String(latestMessage)
+                            String(messages.find(message => message?.role === "user")?.text || latestMessage)
                                 .slice(0, 60) ||
                             "New Chat"
                     }
@@ -2751,6 +2787,7 @@ if (userId && userId !== "default") {
                 conversation.id
             );
         }
+        savedConversationId = conversation.id;
 
         // Save user's message
         await prisma.message.create({
@@ -2804,7 +2841,8 @@ if (userId && userId !== "default") {
 
         return res.json({
             success: true,
-            reply: reply
+            reply,
+            conversationId: savedConversationId
         });
 
     } catch (error) {

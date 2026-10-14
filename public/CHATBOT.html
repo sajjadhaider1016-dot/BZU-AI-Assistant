@@ -9,7 +9,7 @@
     <title>BZU AI Assistant | Developed by Sajjad Haider</title>
 
     <link rel="icon" type="image/png" href="/images/bzu-logo.png">
-    <link rel="stylesheet" href="style.css?v=20261014-concept-refined">
+    <link rel="stylesheet" href="style.css?v=20261014-chat-history-fix">
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -234,10 +234,11 @@
 
         </div>
 
-        <div class="menu-title">
-
-            Your Chats
-
+        <div class="menu-title chat-history-heading">
+            <span>Your Chats</span>
+            <button id="refreshChatsBtn" type="button" title="Refresh saved chats" aria-label="Refresh saved chats">
+                <i class="fa-solid fa-rotate-right" aria-hidden="true"></i>
+            </button>
         </div>
 
         <div id="history" class="history"></div>
@@ -728,7 +729,7 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
     <!-- Main Script -->
-    <script src="script.js?v=20261003-bzu-prompt-fix"></script>
+    <script src="script.js?v=20261014-chat-history-fix"></script>
 
 </body>
 

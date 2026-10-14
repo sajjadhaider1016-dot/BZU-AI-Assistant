@@ -115,10 +115,34 @@ async function loadUserChats() {
 
         const storageKey = `bzuChats_${userId}`;
 
-        chats =
+        const localChats =
             JSON.parse(
                 localStorage.getItem(storageKey)
             ) || [];
+
+        try {
+            const historyResponse = await fetch("/api/conversations", { credentials: "include" });
+            if (historyResponse.ok) {
+                const historyData = await historyResponse.json();
+                const serverChats = (historyData.conversations || []).map(conversation => ({
+                    id: `server-${conversation.id}`,
+                    serverId: conversation.id,
+                    title: conversation.title || "New Chat",
+                    updatedAt: conversation.updatedAt,
+                    messages: conversation.messages || []
+                }));
+                const serverIds = new Set(serverChats.map(chat => chat.serverId));
+                chats = [...serverChats, ...localChats.filter(chat => !chat.serverId || !serverIds.has(chat.serverId))]
+                    .sort((left, right) => new Date(right.updatedAt || 0) - new Date(left.updatedAt || 0))
+                    .slice(0, 100);
+                localStorage.setItem(storageKey, JSON.stringify(chats));
+            } else {
+                chats = localChats;
+            }
+        } catch (historyError) {
+            console.warn("Could not sync saved chat history:", historyError);
+            chats = localChats;
+        }
 
     }
 
@@ -798,6 +822,9 @@ function saveCurrentChat() {
 
                 [...currentChat];
 
+            chats[index].serverId = currentChat.serverId || chats[index].serverId || null;
+            chats[index].updatedAt = new Date().toISOString();
+
             chats[index].title =
 
                 currentChat[0].text.substring(0,40);
@@ -811,6 +838,10 @@ function saveCurrentChat() {
         const chat = {
 
             id: Date.now(),
+
+            serverId: currentChat.serverId || null,
+
+            updatedAt: new Date().toISOString(),
 
             title:
 
@@ -828,11 +859,7 @@ function saveCurrentChat() {
 
     }
 
-    if (chats.length > 20) {
-
-        chats.pop();
-
-    }
+    while (chats.length > 100) chats.pop();
 
     if (userId) {
 
@@ -861,6 +888,7 @@ function loadChat(chat) {
     currentChat = [...chat.messages];
 
     currentChat.id = chat.id;
+    currentChat.serverId = chat.serverId || null;
 
     currentChat.forEach(msg => {
 
@@ -1247,6 +1275,8 @@ async function sendMessage() {
 
     userId: userId,
 
+    conversationId: currentChat.serverId || "",
+
     fileFormat: fileRequest?.formats?.[0] || "",
 
     fileContext: fileRequest?.usePrevious ? previousAssistantReply : "",
@@ -1272,6 +1302,8 @@ async function sendMessage() {
         }
 
         const data = await response.json();
+
+        if (data.conversationId) currentChat.serverId = data.conversationId;
 
         hideTyping();
 
@@ -1485,7 +1517,7 @@ function renderHistory() {
 
         history.innerHTML = `
             <div class="history-empty">
-                No previous chats
+                No saved chats yet. Start a chat and it will appear here.
             </div>
         `;
 
@@ -1507,13 +1539,12 @@ function renderHistory() {
         }
 
 
-        item.innerHTML = `
-
-            <i class="fa-solid fa-message"></i>
-
-            <span>${chat.title}</span>
-
-        `;
+        const icon = document.createElement("i");
+        icon.className = "fa-solid fa-message";
+        icon.setAttribute("aria-hidden", "true");
+        const title = document.createElement("span");
+        title.textContent = chat.title || "New Chat";
+        item.append(icon, title);
 
 
         item.onclick = () => {
@@ -1542,6 +1573,14 @@ function renderHistory() {
 
 }
 
+document.getElementById("refreshChatsBtn")?.addEventListener("click", async () => {
+    const button = document.getElementById("refreshChatsBtn");
+    button?.classList.add("is-refreshing");
+    await loadUserChats();
+    renderHistory();
+    button?.classList.remove("is-refreshing");
+});
+
 
 
 // ================= NEW CHAT =================
@@ -1556,6 +1595,7 @@ function newChat() {
     currentChat = [];
 
     currentChat.id = null;
+    currentChat.serverId = null;
 
     clearMessages();
 
